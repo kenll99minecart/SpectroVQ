@@ -3,7 +3,7 @@ SpectroVQ is an autoencoder framework to compress and represent proteomics mass 
 
 Neural Proteomics Mass Spectrum Compression
 
-![]https://github.com/kenll99minecart/SpectroVQ/blob/main/RVQ.png
+![](https://github.com/kenll99minecart/SpectroVQ/blob/main/RVQ.png)
 
 ## Installation
 
