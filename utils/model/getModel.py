@@ -1,32 +1,32 @@
 from . import modelStream
 import torch
-import json
-DEFAULTPARAMS = {'inputChannel': 1, 'n_q': 16, 'n_filters': 32,'n_residual_layers': 1, 'lstm': 2, 'ratios':[9,7,6,2] , 'final_activation': 'Sigmoid',
-                'residual_kernel_size': 8,'codebook_size':1024, 'FiLMEncoder' : False, 'FiLMDecoder' :False,'flattenQuantization' : False,
-                'quantizationdim': 512, 'biLSTM': True,'causal':False,'useQINCo':False,'inputSize' : 13500,'dimension':512,'kernel_size':8, 
-                'encoders':False,'bucketTransform':False,'applyquantizerdroput':False}
+import yaml
+DEFAULTPARAMS = {'inputChannel': 1, 'n_q':16, 'n_filters': 32,'n_residual_layers': 1, 'lstm': 0, 'ratios':[9,7,6,2] , 'final_activation': 'Sigmoid',
+                'residual_kernel_size': 6,'codebook_size':1024, 'FiLMEncoder' : False, 'FiLMDecoder' :False,'flattenQuantization' : False,
+                'quantizationdim': 512, 'biLSTM': False,'causal':False,'useQINCo':False,'inputSize' : 13500,'dimension':512,'kernel_size':11, 
+                'encoders':False,'bucketTransform':False,'applyquantizerdroput':False,'transformer':8}
 
-def getModel(json_file=None):
+def getModel(yaml_file=None):
     '''
-    Load the model from the json file
-    
+    Load the model from the yaml file
+
     Parameters:
-    json_file (str): The path to the json file; if None, the default parameters are used
+    yaml_file (str): The path to the yaml file; if None, the default parameters are used
     weights_file (str): The path to the weights file; if None, the weights will not be loaded
     '''
-    if json_file is None:
+    if yaml_file is None:
         model_kwargs = DEFAULTPARAMS
         
     else:
-        with open(json_file) as f:
-            model_kwargs = json.load(f)
-    
-    SpectraStream = modelStream.VQMSStream(**model_kwargs) # Following the original parameters 
+        with open(yaml_file) as f:
+            model_kwargs = yaml.load(f, Loader=yaml.FullLoader)
+
+    SpectraStream = modelStream.VQMSStream(**model_kwargs) # Following the original parameters
     return SpectraStream
 
 def ApplyWeights(model,weights_file):
     '''
-    Load the model from the json file
+    Load the model from the yaml file
     
     Parameters:
     model (torch.nn.Module): The model to which the weights will be applied

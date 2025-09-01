@@ -11,8 +11,10 @@ import numpy as np
 import torch
 from torch import nn
 
-from . import quantization as qt 
-from . import modules as m
+import quantization as qt # from .
+import modules as m # from .
+from model_qinco import QINCo
+#from utils import _check_checksum, _linear_overlap_add, _get_checkpoint_url
 
 # Alternate implmentation of the modelStream class
 
@@ -21,7 +23,7 @@ class VQMSStream(nn.Module):
                  ratios: tp.List[int] = [8, 5, 4, 2], activation: str = 'ELU', activation_params: dict = {'alpha': 1.0},final_activation: tp.Optional[str] = 'Tanh',
                  kernel_size: int = 7, last_kernel_size: int = 7, residual_kernel_size: int = 3, dilation_base: int = 2, causal: bool = True, norm: str = 'weight_norm',
                  lstm: int = 2,n_q : int = 16, codebook_size:int = 1024,kmeans_init: bool = True, kmeans_iters: int = 50, threshold_ema_dead_code: int = 2, FiLMEncoder = False, 
-                 FiLMDecoder = False, flattenQuantization = False,quantizationdim = 128,biLSTM :bool = False,FixedCodeSize = None,inputSize = 20480,
+                 FiLMDecoder = False, flattenQuantization = False,quantizationdim = 128,biLSTM :bool = False,FixedCodeSize = None, useQINCo = False,inputSize = 20480,
                  encoders = False,bucketTransform = False, NumBucket = 4,quantl2 = False,applyquantizerdroput = True,transformer: int = 0):
         
         """StreamingModel.
@@ -119,6 +121,8 @@ class VQMSStream(nn.Module):
             self.NumBuckets = NumBucket
             self.quantization = qt.ResidualVectorQuantization(num_quantizers=n_q, codebook_size=codebook_size,dim = self.quantizationdim, kmeans_init=kmeans_init,
                 kmeans_iters=kmeans_iters,threshold_ema_dead_code=threshold_ema_dead_code,l2norm = quantl2)
+            if useQINCo:
+                self.quantization = QINCo(d = self.quantizationdim, K = codebook_size, L = 1, M = n_q, h = 64)
         else:
             self.quantization = nn.Identity()
         
@@ -138,7 +142,7 @@ class VQMSStream(nn.Module):
 
     def forward(self,input,FiLM_input = None,returnAll = False,use_vq = True):
         x = self.encoder(input,FiLM_input)
-        #print(x.shape)
+        
         #if (FiLM_input is not None) & (hasattr(self,'FiLMlayers')):
             # if (self.FiLMparams['Last_layer_only']):
             #     FiLM_output1 = self.FiLMlayers[0](FiLM_input)
@@ -167,8 +171,8 @@ class VQMSStream(nn.Module):
                     #     (i*original_shape[1])//self.quantizationdim] += x[:,:,i]
                     # print(torch.eq(u,x.transpose(1,2).reshape(x.shape[0],x.shape[2]//self.NumBuckets,self.quantizationdim).transpose(1,2)).all())
                     # Underlying logic
-                    #Input shape [B,C,L]
-                    #Output shape [B,C*NumBuckets,L//NumBuckets]
+                    # Input shape [B,C,L]
+                    # Output shape [B,C*NumBuckets,L//NumBuckets]
                     x = x.transpose(1,2).reshape(x.shape[0],x.shape[2]//self.NumBuckets,self.quantizationdim).transpose(1,2)
                 else:
                     original_shape = x.shape
@@ -209,10 +213,9 @@ class VQMSStream(nn.Module):
             quantized = x
             BeforeQuantization = None
             out_losses = 0
+
         x = self.decoder(quantized,FiLM_input)
-        #print(x.shape)
         if x.shape[2] != input.shape[2]:
-            #print(x.shape)
             x = x[:,:,:input.shape[2]]
         if returnAll:
             return x,out_losses, out_Indices
@@ -268,6 +271,16 @@ class VQMSStream(nn.Module):
         return x
     
     def forwardWithnumQuantizers(self,x,n_q:int):
+        '''
+        Forward pass with a specified number of quantizers.
+        Args:
+            x (torch.Tensor): Input spectrum of shape (batch_size, channels, length).
+            n_q (int): Number of quantizers to use.
+        Returns:
+            decoded (torch.Tensor): output spectrum.
+            qLoss (torch.Tensor): Quantization loss.
+            BeforeQuantization (torch.Tensor): Output before quantization.
+        '''
         input_shape = x.shape
         x = self.encoder(x,None)
         if self.quantizationdim is not None:
@@ -294,16 +307,27 @@ class VQMSStream(nn.Module):
 
 
 if __name__ == '__main__':
-    model_kwargs = {'inputChannel': 1, 'n_q': 22, 'n_filters': 32,'n_residual_layers': 1, 'lstm': 3, 'ratios':[10,7,6,5] , 'final_activation': 'Sigmoid',
-                'residual_kernel_size': 8,'codebook_size':2048, 'FiLMEncoder' : False, 'FiLMDecoder' :False,'flattenQuantization' : False,
-                'quantizationdim': 228, 'biLSTM': True,'causal':False,'useQINCo':False,'inputSize' : 13500,'dimension':228,'kernel_size':8, 
-                'encoders':False,'bucketTransform':False}
-    model_kwargs = {'inputChannel': 1, 'n_q':6, 'n_filters': 32,'n_residual_layers': 1, 'lstm': 2, 'ratios':[8,6,5,4] , 'final_activation': 'Sigmoid',
-                'residual_kernel_size': 8,'codebook_size':1024, 'FiLMEncoder' : False, 'FiLMDecoder' :False,'flattenQuantization' : False,
-                'quantizationdim': 256, 'biLSTM': True,'causal':False,'inputSize' : 13500,'dimension':256,'kernel_size':8, 
-                'encoders':False,'bucketTransform':False,'applyquantizerdroput':True,'transformer':3}#480,480
+    import os
+    os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+    model_kwargs ={'inputChannel': 1, 'n_q':16, 'n_filters': 32,'n_residual_layers': 1, 'lstm': 0, 'ratios':[8, 5, 4, 2] , 'final_activation': 'Sigmoid',
+                'codebook_size':1024, 'FiLMEncoder' : False, 'FiLMDecoder' :False,'flattenQuantization' : False,
+                'biLSTM': False,'causal':False,'useQINCo':False,'inputSize' : 13500,'dimension':128,
+                'encoders':False,'bucketTransform':False,'applyquantizerdroput':True,'transformer':8}
+#     {'n_q': 12,
+#  'n_residual_layers': 2,
+#  'codebook_size': 1541,
+#  'quantizationdim': 62,
+#  'learning_rate': 7.481581992440448e-05,
+#  'stride1': 10,
+#  'stride2': 5,
+#  'stride3': 3,
+#  'stride4': 1,
+#  'LSTM': 1,
+#  'weightSE': 2.4429485623013045,
+#  'weightCS': 0.34894040433259055}
     model = VQMSStream(**model_kwargs)
     model.to('cuda')
-    print(model(torch.randn(16,1,13500,device='cuda'))[0].shape)
-    # print(model.encode(torch.randn(16,1,13500),returnAll = True)[1].shape)
+    # print(model.encoder(torch.randn(16,1,13500,device='cuda'))[0].shape)
+    model(torch.randn(16,1,13500,device='cuda')) #,FiLM_input = torch.randn(16,1,13500,device='cuda'))
+
     # %%
