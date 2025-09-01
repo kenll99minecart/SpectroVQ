@@ -17,6 +17,7 @@ class SLSTM(nn.Module):
     def __init__(self, dimension: int, num_layers: int = 2, skip: bool = True, biLSTM:bool = False):
         super().__init__()
         self.skip = skip
+        # biLSTM layer: https://arxiv.org/abs/2308.16692 Reference for the biLSTM layer
         self.lstm = nn.LSTM(dimension, dimension, num_layers) if not biLSTM else nn.LSTM(dimension, dimension, num_layers, bidirectional=True)
         self.biLSTM = biLSTM
         # if biLSTM:

@@ -14,8 +14,10 @@ import torch.nn as nn
 from . import (
     SConv1d,
     SConvTranspose1d,
-    SLSTM
+    SLSTM,
 )
+
+from .transformer import Transformer,ModelArgs
 
 class AffineTransformLayer(nn.Module):
     def __init__(self, in_channels_Condition = 1,dim = 4) -> None:
@@ -130,7 +132,8 @@ class SEANetEncoder(nn.Module):
                  ratios: tp.List[int] = [8, 5, 4, 2], activation: str = 'ELU', activation_params: dict = {'alpha': 1.0},
                  norm: str = 'weight_norm', norm_params: tp.Dict[str, tp.Any] = {}, kernel_size: int = 7,
                  last_kernel_size: int = 7, residual_kernel_size: int = 3, dilation_base: int = 2, causal: bool = False,
-                 pad_mode: str = 'reflect', true_skip: bool = False, compress: int = 2, lstm: int = 2,AffineTransform: bool = False,biLSTM: bool = False):
+                 pad_mode: str = 'reflect', true_skip: bool = False, compress: int = 2, lstm: int = 2,AffineTransform: bool = False,biLSTM: bool = False
+                 ,transformer: int = 0,transformer_args: dict = {'max_seq_len': 100}):
         super().__init__()
         self.channels = channels
         self.dimension = dimension
@@ -173,6 +176,14 @@ class SEANetEncoder(nn.Module):
         if lstm:
             model += [SLSTM(mult * n_filters, num_layers=lstm,biLSTM = biLSTM)]
 
+        if transformer:
+            modelargs = ModelArgs()
+            modelargs.dim = mult * n_filters
+            modelargs.n_layers = transformer
+            modelargs.max_seq_len = transformer_args['max_seq_len']
+            model +=[Transformer(modelargs)]
+
+        # Add final layers
         model += [
             act(**activation_params),
         SConv1d(mult * n_filters, dimension, last_kernel_size, norm=norm, norm_kwargs=norm_params,
@@ -236,7 +247,8 @@ class SEANetDecoder(nn.Module):
                  norm: str = 'weight_norm', norm_params: tp.Dict[str, tp.Any] = {}, kernel_size: int = 7,
                  last_kernel_size: int = 7, residual_kernel_size: int = 3, dilation_base: int = 2, causal: bool = False,
                  pad_mode: str = 'reflect', true_skip: bool = False, compress: int = 2, lstm: int = 2,
-                 trim_right_ratio: float = 1.0,AffineTransform: bool = False, biLSTM:bool = False):
+                 trim_right_ratio: float = 1.0,AffineTransform: bool = False, biLSTM:bool = False,transformer: int = 0
+                 ,transformer_args: dict = {'max_seq_len': 100}):
         super().__init__()
         self.dimension = dimension
         self.channels = channels
@@ -261,6 +273,13 @@ class SEANetDecoder(nn.Module):
         if lstm:
             model += [SLSTM(mult * n_filters, num_layers=lstm,biLSTM=biLSTM)]
 
+        if transformer:
+            modelargs = ModelArgs()
+            modelargs.dim = mult * n_filters
+            modelargs.n_layers = transformer
+            modelargs.max_seq_len = transformer_args['max_seq_len']
+            model +=[Transformer(modelargs)]
+        
         # Upsample to raw audio scale
         for i, ratio in enumerate(self.ratios):
             # Add upsampling layers

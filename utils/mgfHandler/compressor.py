@@ -1,5 +1,5 @@
-from utils.Compression import batchprocessor
-from utils.Compression import compress
+from ..Compression import batchprocessor
+from ..Compression import compress
 from pyteomics import mgf
 import os
 import torch

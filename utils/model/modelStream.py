@@ -2,6 +2,7 @@
 # https://github.com/facebookresearch/encodec
 # which is released under MIT License. Hereafter, the original license:
 # MIT License
+# %%
 import math
 from pathlib import Path
 import typing as tp
@@ -11,7 +12,9 @@ import torch
 from torch import nn
 
 from . import quantization as qt 
-from . import modules as m 
+from . import modules as m
+
+# Alternate implmentation of the modelStream class
 
 class VQMSStream(nn.Module):
     def __init__(self, inputChannel = 1, dimension = 128, n_filters = 32,n_residual_layers: int = 1,
@@ -19,7 +22,7 @@ class VQMSStream(nn.Module):
                  kernel_size: int = 7, last_kernel_size: int = 7, residual_kernel_size: int = 3, dilation_base: int = 2, causal: bool = True, norm: str = 'weight_norm',
                  lstm: int = 2,n_q : int = 16, codebook_size:int = 1024,kmeans_init: bool = True, kmeans_iters: int = 50, threshold_ema_dead_code: int = 2, FiLMEncoder = False, 
                  FiLMDecoder = False, flattenQuantization = False,quantizationdim = 128,biLSTM :bool = False,FixedCodeSize = None,inputSize = 20480,
-                 encoders = False,bucketTransform = False, NumBucket = 4,quantl2 = False,applyquantizerdroput = True):
+                 encoders = False,bucketTransform = False, NumBucket = 4,quantl2 = False,applyquantizerdroput = True,transformer: int = 0):
         
         """StreamingModel.
     Args:
@@ -70,19 +73,19 @@ class VQMSStream(nn.Module):
         #         self.FiLMlayers.append(nn.Linear(1,2))
         #     else:
         #         raise NotImplementedError("FiLM is only implemented for the last layer")
-        
+        self.embeddingLength = math.ceil(inputSize / np.prod(ratios))
 
         self.encoder = m.SEANetEncoder(channels = inputChannel, dimension = dimension, n_filters = n_filters,n_residual_layers = n_residual_layers,
                  ratios = ratios, activation= activation, activation_params = activation_params, kernel_size=kernel_size,
                  last_kernel_size = last_kernel_size, residual_kernel_size = residual_kernel_size, dilation_base= dilation_base, causal=causal,
-                 lstm = lstm,norm = norm,AffineTransform=FiLMEncoder,biLSTM = biLSTM)
+                 lstm = lstm,norm = norm,AffineTransform=FiLMEncoder,biLSTM = biLSTM,transformer = transformer,transformer_args={'max_seq_len':self.embeddingLength})
         
         self.decoder = m.SEANetDecoder(channels = inputChannel, dimension = dimension, n_filters = n_filters,n_residual_layers = n_residual_layers,
                  ratios = ratios, activation= activation, activation_params = activation_params, kernel_size=kernel_size,
                  last_kernel_size = last_kernel_size, residual_kernel_size = residual_kernel_size, dilation_base= dilation_base, causal=causal,
-                 lstm = lstm,final_activation = final_activation,norm = norm,AffineTransform=FiLMDecoder,biLSTM = biLSTM)
+                 lstm = lstm,final_activation = final_activation,norm = norm,AffineTransform=FiLMDecoder,biLSTM = biLSTM,transformer = transformer,transformer_args={'max_seq_len':self.embeddingLength})
         self.inputSize = inputSize
-        self.embeddingLength = math.ceil(inputSize / np.prod(self.encoder.ratios))
+        
         self.quantizationdim = quantizationdim
         self.n_q = n_q
         flattenShape = self.encoder(torch.randn(1,inputChannel,inputSize)).size(1), self.encoder(torch.randn(1,inputChannel,inputSize)).size(2)
@@ -206,7 +209,6 @@ class VQMSStream(nn.Module):
             quantized = x
             BeforeQuantization = None
             out_losses = 0
-        
         x = self.decoder(quantized,FiLM_input)
         #print(x.shape)
         if x.shape[2] != input.shape[2]:
@@ -292,11 +294,16 @@ class VQMSStream(nn.Module):
 
 
 if __name__ == '__main__':
-    model_kwargs = {'inputChannel': 1, 'n_q': 16, 'n_filters': 32,'n_residual_layers': 1, 'lstm': 2, 'ratios':[9,7,6,2] , 'final_activation': 'Sigmoid',
+    model_kwargs = {'inputChannel': 1, 'n_q': 22, 'n_filters': 32,'n_residual_layers': 1, 'lstm': 3, 'ratios':[10,7,6,5] , 'final_activation': 'Sigmoid',
+                'residual_kernel_size': 8,'codebook_size':2048, 'FiLMEncoder' : False, 'FiLMDecoder' :False,'flattenQuantization' : False,
+                'quantizationdim': 228, 'biLSTM': True,'causal':False,'useQINCo':False,'inputSize' : 13500,'dimension':228,'kernel_size':8, 
+                'encoders':False,'bucketTransform':False}
+    model_kwargs = {'inputChannel': 1, 'n_q':6, 'n_filters': 32,'n_residual_layers': 1, 'lstm': 2, 'ratios':[8,6,5,4] , 'final_activation': 'Sigmoid',
                 'residual_kernel_size': 8,'codebook_size':1024, 'FiLMEncoder' : False, 'FiLMDecoder' :False,'flattenQuantization' : False,
-                'quantizationdim': 512, 'biLSTM': True,'causal':False,'useQINCo':False,'inputSize' : 13500,'dimension':512,'kernel_size':8, 
-                'encoders':False,'bucketTransform':False,'applyquantizerdroput':True}#480,480
+                'quantizationdim': 256, 'biLSTM': True,'causal':False,'inputSize' : 13500,'dimension':256,'kernel_size':8, 
+                'encoders':False,'bucketTransform':False,'applyquantizerdroput':True,'transformer':3}#480,480
     model = VQMSStream(**model_kwargs)
-    print(model(torch.randn(16,1,13500))[0].shape)
-    print(model.encode(torch.randn(16,1,13500),returnAll = True)[1].shape)
-# %%
+    model.to('cuda')
+    print(model(torch.randn(16,1,13500,device='cuda'))[0].shape)
+    # print(model.encode(torch.randn(16,1,13500),returnAll = True)[1].shape)
+    # %%

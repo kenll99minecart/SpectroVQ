@@ -19,4 +19,3 @@ from .conv import (
 )
 from .lstm import SLSTM
 from .seanet import SEANetEncoder, SEANetDecoder
-#from .transformer import StreamingTransformerEncoder

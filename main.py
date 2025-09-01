@@ -8,7 +8,7 @@ argparser.add_argument('output', type=str, help='Output file name')
 
 
 # %%
-from compressor import MGFCompressor
+from SpectroVQ.utils.mgfHandler.compressor import MGFCompressor
 #from .decompressor import MGFDecompressor
 from utils.model import getModel
 import os
