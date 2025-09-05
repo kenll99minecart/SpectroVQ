@@ -1,8 +1,6 @@
 # This implementation is inspired from
 # https://github.com/facebookresearch/encodec
-# which is released under MIT License. Hereafter, the original license:
-# MIT License
-# %%
+# which is released under MIT License.
 import math
 from pathlib import Path
 import typing as tp
@@ -11,9 +9,9 @@ import numpy as np
 import torch
 from torch import nn
 
-import quantization as qt # from .
-import modules as m # from .
-from model_qinco import QINCo
+from . import quantization as qt # from .
+from . import modules as m # from .
+# from model_qinco import QINCo
 #from utils import _check_checksum, _linear_overlap_add, _get_checkpoint_url
 
 # Alternate implmentation of the modelStream class
@@ -121,8 +119,8 @@ class VQMSStream(nn.Module):
             self.NumBuckets = NumBucket
             self.quantization = qt.ResidualVectorQuantization(num_quantizers=n_q, codebook_size=codebook_size,dim = self.quantizationdim, kmeans_init=kmeans_init,
                 kmeans_iters=kmeans_iters,threshold_ema_dead_code=threshold_ema_dead_code,l2norm = quantl2)
-            if useQINCo:
-                self.quantization = QINCo(d = self.quantizationdim, K = codebook_size, L = 1, M = n_q, h = 64)
+            # if useQINCo:
+            #     self.quantization = QINCo(d = self.quantizationdim, K = codebook_size, L = 1, M = n_q, h = 64)
         else:
             self.quantization = nn.Identity()
         
@@ -183,7 +181,7 @@ class VQMSStream(nn.Module):
                 BeforeQuantization = x
 
                 if hasattr(self,'rng'):
-                    if self.rng.random() >= 0.5: #quantizer dropout probability
+                    if self.rng.random() >= 0.5: # quantizer dropout probability
                         num_quantizers = self.rng.integers(1,self.n_q+1)
                         quantized, out_Indices, out_losses = self.quantization(x,num_quantizers)
                     else:

@@ -1,0 +1,12 @@
+/home/james/.conda/envs/DeepLearning/lib/python3.11/site-packages/psims/mzmlb/writer.py:33: UserWarning: hdf5plugin is missing! Only the slower GZIP compression scheme will be available! Please install hdf5plugin to be able to use Blosc.
+  warnings.warn(
+flattenShape: (512, 18)
+Processing file: LFQ_Orbitrap_DDA_Yeast_03.mgf
+Processing file: LFQ_Orbitrap_DDA_Ecoli_02.mgf
+Processing file: LFQ_Orbitrap_DDA_Yeast_01.mgf
+Processing file: LFQ_Orbitrap_DDA_Ecoli_01.mgf
+Processing file: LFQ_Orbitrap_DDA_Ecoli_03.mgf
+Processing file: LFQ_Orbitrap_DDA_Human_02.mgf
+Processing file: LFQ_Orbitrap_DDA_Yeast_02.mgf
+Processing file: LFQ_Orbitrap_DDA_Human_01.mgf
+Processing file: LFQ_Orbitrap_DDA_Human_03.mgf

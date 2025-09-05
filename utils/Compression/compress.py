@@ -4,7 +4,7 @@
 # MIT License
 
 import typing as tp
-
+import gzip
 class BitPacker:
     """Simple bit packer to handle ints with a non standard width, e.g. 10 bits.
     Note that for some bandwidth (1.5, 3), the codebook representation
@@ -14,11 +14,12 @@ class BitPacker:
         bits (int): number of bits per value that will be pushed.
         fo (IO[bytes]): file-object to push the bytes to.
     """
-    def __init__(self, bits: int, fo: tp.IO[bytes]):
+    def __init__(self, bits: int, fo: tp.IO[bytes], gzip_compression = None):
         self._current_value = 0
         self._current_bits = 0
         self.bits = bits
-        self.fo = fo
+        self.fo = gzip.GzipFile(fileobj=fo, mode='wb',compresslevel=gzip_compression) if gzip_compression is not None else fo
+        self.use_gzip = gzip_compression is not None
 
     def push(self, value: int):
         """Push a new value to the stream. This will immediately
@@ -40,6 +41,8 @@ class BitPacker:
             self._current_value = 0
             self._current_bits = 0
         self.fo.flush()
+        if self.use_gzip:
+            self.fo.close()
 
 
 class BitUnpacker:
@@ -48,10 +51,11 @@ class BitUnpacker:
     Args:
         bits (int): number of bits of the values to decode.
         fo (IO[bytes]): file-object to push the bytes to.
+        use_gzip (bool): whether the input stream is gzip compressed.
         """
-    def __init__(self, bits: int, fo: tp.IO[bytes]):
+    def __init__(self, bits: int, fo: tp.IO[bytes], gzip_compression = None):
         self.bits = bits
-        self.fo = fo
+        self.fo = gzip.GzipFile(fileobj=fo, mode='rb',compresslevel=gzip_compression) if gzip_compression is not None else fo
         self._mask = (1 << bits) - 1
         self._current_value = 0
         self._current_bits = 0
