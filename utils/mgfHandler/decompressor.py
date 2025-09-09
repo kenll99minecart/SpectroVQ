@@ -10,7 +10,7 @@ import pickle
 DEFAULTMGFPARAMSKEYS = ['title','rtinseconds','pepmass','charge','scans','seq','modifications']
 class MGFDecompressor():
     def __init__(self,model,inputFileName,outputfilemgf = None, batch_size = None,quantizer = 6, store_chimeric = True,
-                 gzip_compression_level = 6):
+                 gzip_compression_level = None,zlib_compression_level = 6):
         self.model = model
         if outputfilemgf is None:
             self.OutputFileMGF = 'output.mgf'
@@ -21,7 +21,7 @@ class MGFDecompressor():
         self.device = next(self.model.parameters()).device
         assert os.path.exists(self.inputFileName), 'Input file does not exist'
         self.inputFileNameWithoutExt = inputFileName.split('.')[0]
-        self.depacker = compress.BitUnpacker(10, open(self.inputFileName, 'rb'),gzip_compression=gzip_compression_level)
+        self.depacker = compress.BitUnpacker(10, open(self.inputFileName, 'rb'),gzip_compression=gzip_compression_level, zlib_compression=zlib_compression_level)
         self.metadataFileName = self.inputFileNameWithoutExt + '.parquet' 
         self.MaxValList = []
         if batch_size is None:

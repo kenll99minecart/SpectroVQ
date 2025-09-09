@@ -13,7 +13,7 @@ import pickle
 DEFAULTMGFPARAMSKEYS = ['title','rtinseconds','pepmass','charge','scans','seq','modifications']
 class MGFCompressor():
     def __init__(self,model,mgfFilePath,OutputFileName = None,batch_size = None,quantizer = 6, store_chimeric = True,
-                 gzip_compression_level = 6):
+                 gzip_compression_level = None,zlib_compression_level = 6):
         self.model = model
         self.mgfFilePath = mgfFilePath
         self.OutputFileName = OutputFileName
@@ -22,7 +22,7 @@ class MGFCompressor():
             Warning(f"Output file name is not defined; using input name {self.OutputFileName} as output name")
         self.mgfFile = mgf.read(mgfFilePath)
         self.device = next(self.model.parameters()).device
-        self.packer = compress.BitPacker(10, open(self.OutputFileName + '.vqms2', 'wb'), gzip_compression=gzip_compression_level)
+        self.packer = compress.BitPacker(10, open(self.OutputFileName + '.vqms2', 'wb'), gzip_compression=gzip_compression_level, zlib_compression=zlib_compression_level)
         self.gzip_compression_level = gzip_compression_level
         self.quantizer = quantizer
         self.metadataFileName = self.OutputFileName + '.parquet' 
