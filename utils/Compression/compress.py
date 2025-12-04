@@ -138,6 +138,16 @@ class BitPacker:
         gzip_compression (int, optional): Level of gzip compression (1-9), None for no compression.
         zlib_compression (int, optional): Level of zlib compression (1-9), None for no compression.
     """
+    """Simple bit packer to handle ints with a non standard width, e.g. 10 bits.
+    Note that for some bandwidth (1.5, 3), the codebook representation
+    will not cover an integer number of bytes.
+
+    Args:
+        bits (int): number of bits per value that will be pushed.
+        fo (IO[bytes]): file-object to push the bytes to.
+        gzip_compression (int, optional): Level of gzip compression (1-9), None for no compression.
+        zlib_compression (int, optional): Level of zlib compression (1-9), None for no compression.
+    """
     def __init__(self, bits: int, fo: tp.IO[bytes], gzip_compression = None, zlib_compression = None):
         self._current_value = 0
         self._current_bits = 0
@@ -187,6 +197,14 @@ class BitPacker:
 
 
 class BitUnpacker:
+    """BitUnpacker does the opposite of `BitPacker`.
+
+    Args:
+        bits (int): number of bits of the values to decode.
+        fo (IO[bytes]): file-object to push the bytes to.
+        gzip_compression (int, optional): Level of gzip compression used, None if no gzip compression.
+        zlib_compression (int, optional): Level of zlib compression used, None if no zlib compression.
+    """
     """BitUnpacker does the opposite of `BitPacker`.
 
     Args:

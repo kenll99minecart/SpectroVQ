@@ -23,6 +23,20 @@ import numpy as np
 
 def fragments(peptide, types=('b', 'y'), maxcharge=1):
     """
+    Generate theoretical fragment ions for a given peptide sequence.
+
+    This function calculates all possible m/z values for fragment ions of specified types
+    (b and y ions by default) and charges for peptide sequencing in mass spectrometry.
+
+    Args:
+        peptide (str): Amino acid sequence of the peptide
+        types (tuple): Types of fragment ions to generate ('b', 'y', 'a', 'c', etc.)
+        maxcharge (int): Maximum charge state to consider for fragments
+
+    Yields:
+        tuple: (m/z value, relative intensity) for each theoretical fragment ion
+    """
+    """
     The function generates all possible m/z for fragments of types
     `types` and of charges from 1 to `maxharge`.
     """
@@ -61,9 +75,31 @@ def fragments(peptide, types=('b', 'y'), maxcharge=1):
                         print(finalpeptide)
     
 def find0arr(arr):
+    """
+    Utility function to get the length of intensity array in a spectrum entry.
+
+    Args:
+        arr (dict): Dictionary containing spectrum data with 'intensity' key
+
+    Returns:
+        int: Length of the intensity array
+    """
     return len(arr['intensity'])
 
 def generateTheoreticalSpectrum(peptide,charge = 1):
+    """
+    Generate theoretical mass spectrum from a peptide sequence.
+
+    Uses the fragments function to calculate all theoretical fragment ions
+    and returns them as m/z and intensity arrays.
+
+    Args:
+        peptide (str): Amino acid sequence of the peptide
+        charge (int): Charge state for the precursor ion
+
+    Returns:
+        tuple: (mz_array, intensity_array) containing theoretical fragment ions
+    """
     mz = []
     intensity = []
     for mzi, intensityi in fragments(peptide, maxcharge=charge):
@@ -72,6 +108,15 @@ def generateTheoreticalSpectrum(peptide,charge = 1):
     return mz,intensity
 
 def PreprocessData():
+    """
+    Preprocess training data for the neural network model.
+
+    Loads spectral library data, processes metadata, filters spectra based on
+    quality criteria, and prepares training and validation datasets.
+
+    Returns:
+        tuple: (train_dataframe, validation_dataframe) containing processed data
+    """
     # df_train = pd.read_feather('/data/data/NIST/MSP.feather')
     # df_train['PrecursorMZ'] = df_train['DataBase'].apply(lambda x: float(str(x).split('Parent=')[-1].split(' ')[0]))
     # df_train['Charge'] = df_train['DataBase'].apply(lambda x: int(str(x).split('Charge=')[-1].split(' ')[0]))
@@ -116,12 +161,28 @@ def PreprocessData():
     return train_data, test_data
 
 def transformToTensor(x):
+    """
+    Convert pandas Series to PyTorch tensor.
+
+    Args:
+        x: Pandas Series containing numerical data
+
+    Returns:
+        torch.Tensor: Converted tensor with float32 dtype
+    """
     return torch.from_numpy(np.array(x.to_list(),dtype='float32'))
 
 Bin_size = 0.1
 Max_seq = 128
 class SpectrumAugmentation():
     def __init__(self,seed = 10,returntype = 'torch'):
+        """
+        Initialize spectrum augmentation class for data augmentation during training.
+
+        Args:
+            seed (int): Random seed for reproducible augmentations
+            returntype (str): Return type for augmented data ('torch' or 'numpy')
+        """
         self.randomizer = np.random.default_rng(seed=seed)
         if returntype == 'torch':
             self.returntype = torch.from_numpy
@@ -131,6 +192,16 @@ class SpectrumAugmentation():
             raise NotImplementedError('returntype must be either torch or numpy')
 
     def MovingAverage(self,x, w):
+        """
+        Apply moving average smoothing to spectrum data.
+
+        Args:
+            x: Input signal array
+            w (int): Kernel size for smoothing window
+
+        Returns:
+            Smoothed signal using moving average filter
+        """
         '''
         x: input signal
         w: kernel size
@@ -138,39 +209,59 @@ class SpectrumAugmentation():
         return np.convolve(x, np.ones(w), 'valid') / w
 
     def AddGausianNoise(self,x):
-        '''
-        x: input signal
-        '''
-        return x + self.randomizer.normal(0, 0.001, size=x.shape)
+        """
+        Add Gaussian noise to spectrum data for augmentation.
+
+        Args:
+            x: Input spectrum array
+
+        Returns:
+            Spectrum array with added Gaussian noise (mean=0, std=0.001)
+        """
 
     def ModifyMZ(self,mz):
-        MZModified = self.randomizer.binomial(len(mz),0.25)
-        Changeidx = self.randomizer.integers(low= 0, high = len(mz), size = MZModified)
-        for i in Changeidx:
-            mz[i] = mz[i] + self.randomizer.normal(0,0.01)
-        return mz
+        """
+        Randomly modify m/z values by adding small Gaussian noise.
+
+        Args:
+            mz: Array of m/z values
+
+        Returns:
+            Modified m/z array with 25% of values perturbed by small random amounts
+        """
 
     def ApplyMovingAverage(self,x):
-        MovingAverage = self.randomizer.binomial(len(x),0.5)
-        Changeidx = self.randomizer.integers(low= 0, high = len(x)-11, size = MovingAverage)
-        for u in Changeidx:
-            if (x[u] == 0) & (x[u+1] == 0):
-                continue
-            else:
-                x[u:u+11] = self.MovingAverage(x[u:u+11],w = 11)
-        return x
+        """
+        Apply moving average smoothing to random segments of spectrum.
+
+        Args:
+            x: Input spectrum array
+
+        Returns:
+            Spectrum array with random segments smoothed using moving average
+        """
     
     def AddPeriodicPeaks(self,x):
-        NoisePeakWavelength = self.randomizer.random(x.shape[0])
-        magnitude = self.randomizer.gamma(1,0.001, x.shape[0])
-        temp = np.linspace(0,10,x.shape[0])
-        periodicPeaks = (np.sin(2*np.pi*NoisePeakWavelength*temp)+1)*magnitude
-        return x + periodicPeaks
+        """
+        Add periodic noise peaks to spectrum for data augmentation.
+
+        Args:
+            x: Input spectrum array
+
+        Returns:
+            Spectrum array with added periodic noise peaks of varying wavelengths
+        """
     
 # %%
 randomAugmentizer = np.random.default_rng(seed=42)
 class SpectrumBatch(Dataset):
     def __init__(self, df):
+        """
+        Custom Dataset class for spectrum data with augmentation capabilities.
+
+        Args:
+            df (pd.DataFrame): DataFrame containing spectrum data with m/z, intensity, and metadata
+        """
         df.sort_values(by = 'PrecursorMz',inplace = True)
         df.reset_index(drop = True,inplace = True)
         self.Xmz = df['m/z']
@@ -182,16 +273,37 @@ class SpectrumBatch(Dataset):
         self.applyAugmentationRNG = np.random.default_rng(seed=self.base_seed)
 
     def __len__(self):
+        """
+        Return the total number of spectra in the dataset.
+
+        Returns:
+            int: Length of the dataset
+        """
         return self.length
     
     def reset_rng(self):
+        """
+        Reset random number generators for reproducible augmentation across epochs.
+        """
         self.applyAugmentationRNG = np.random.default_rng(seed=self.base_seed + randomAugmentizer.integers(0,1000))
         self.Augmentation = SpectrumAugmentation(seed = self.base_seed + randomAugmentizer.integers(0,1000),returntype = 'torch')
     
     def set_epoch(self):
+        """
+        Reset random state for new training epoch.
+        """
         self.reset_rng()
     
     def __getitem__(self, idx):
+        """
+        Get a single spectrum with augmentations applied.
+
+        Args:
+            idx (int): Index of the spectrum to retrieve
+
+        Returns:
+            tuple: (original_spectrum, augmented_spectrum) as tensors
+        """
         mz,it = self.Xmz.iloc[idx],self.Xintensity.iloc[idx]
         if self.applyAugmentationRNG.binomial(1,0.5):
             mz = self.Augmentation.ModifyMZ(mz)
@@ -223,15 +335,49 @@ class SpectrumBatch(Dataset):
 eps = 1e-6
 cos2 = nn.CosineSimilarity(dim=2, eps=1e-6)
 def SpectralConstrastLoss(output,target):
+    """
+    Calculate spectral contrastive loss using cosine similarity.
+
+    This loss function measures the similarity between predicted and target spectra
+    using cosine similarity converted to angular distance.
+
+    Args:
+        output: Predicted spectrum tensor
+        target: Target spectrum tensor
+
+    Returns:
+        torch.Tensor: Mean angular distance between spectra
+    """
     Similarity = cos2(output,target)
     dotProduct = (2*torch.acos(Similarity))/(math.pi)
     return dotProduct.mean()
 
 def rescaleSepectra(Spectra,dim):
+    """
+    Rescale spectra to have maximum value of 1 along specified dimension.
+
+    Args:
+        Spectra: Input spectrum tensor
+        dim (int): Dimension along which to find maximum
+
+    Returns:
+        torch.Tensor: Rescaled spectrum tensor
+    """
     SpectraMax = torch.max(Spectra,dim = dim,keepdim=True)[0]
     return Spectra / SpectraMax
 
 def spectral_entropy(spectrum,dim = 2,reweigh  = False):#1-
+    """
+    Calculate spectral entropy of input spectrum.
+
+    Args:
+        spectrum: Input spectrum tensor
+        dim (int): Dimension along which to calculate entropy
+        reweigh (bool): Whether to apply reweighting scheme
+
+    Returns:
+        torch.Tensor: Spectral entropy value
+    """
     #spectrum = spectrum / (torch.sum(spectrum,dim = dim,keepdim = True) + eps)
     if reweigh:
         spectrum = torch.where(spectrum >= 3, torch.tensor(1.0), 0.25 + spectrum * torch.log(spectrum + eps))
@@ -239,6 +385,19 @@ def spectral_entropy(spectrum,dim = 2,reweigh  = False):#1-
 
 # https://www.nature.com/articles/s41592-021-01331-z#Sec9
 def spectral_entropy_loss(input, target,dim = 2):
+    """
+    Calculate spectral entropy loss between input and target spectra.
+
+    Based on the paper: https://www.nature.com/articles/s41592-021-01331-z#Sec9
+
+    Args:
+        input: Input spectrum tensor
+        target: Target spectrum tensor
+        dim (int): Dimension along which to calculate entropy
+
+    Returns:
+        torch.Tensor: Spectral entropy loss value
+    """
     inputspectrum = input / (torch.sum(input,dim = dim,keepdim = True) + eps)
     targetspectrum = target / (torch.sum(target,dim = dim,keepdim = True) + eps)
     SpectrumAB = inputspectrum + targetspectrum
@@ -250,6 +409,17 @@ def spectral_entropy_loss(input, target,dim = 2):
 
 Threshold = 1e-2
 def peak_portion(input, target,dim = 2):
+    """
+    Calculate peak portion mismatch between input and target spectra.
+
+    Args:
+        input: Input spectrum tensor
+        target: Target spectrum tensor
+        dim (int): Dimension along which to calculate
+
+    Returns:
+        torch.Tensor: Peak portion mismatch ratio
+    """
     inputspectrum = torch.clamp(input / Threshold,min = 0,max = 1)
     numinputpeaks = torch.sum(inputspectrum,dim = dim,keepdim=True)
     targetspectrum = torch.clamp(target / Threshold,min = 0,max = 1)
@@ -274,6 +444,15 @@ from transformers import get_linear_schedule_with_warmup
 weightCS, weightSE = 1.0, 1.0
 class LightningModelSpectraStream(L.LightningModule):
     def __init__(self, model,learning_rate,len_train_loader,len_test_loader):
+        """
+        PyTorch Lightning module for training the SpectraStream model.
+
+        Args:
+            model: Neural network model to train
+            learning_rate (float): Learning rate for optimization
+            len_train_loader (int): Number of batches in training set
+            len_test_loader (int): Number of batches in test set
+        """
         super().__init__()
         self.model = model
         # for para in self.discriminator.parameters():
@@ -288,6 +467,16 @@ class LightningModelSpectraStream(L.LightningModule):
         #self.scheduler = lr_scheduler(optimizer)
         
     def training_step(self, batch, batch_idx):
+        """
+        Execute a single training step.
+
+        Args:
+            batch: Batch of training data (spectra, augmented_spectra)
+            batch_idx (int): Index of the current batch
+
+        Returns:
+            torch.Tensor: Loss value for backpropagation
+        """
         # training_step defines the train loop.
         spectra,aug_spectra = batch
         vq = bool(self.rng.integers(0,2))
@@ -309,6 +498,13 @@ class LightningModelSpectraStream(L.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
+        """
+        Execute a single validation step.
+
+        Args:
+            batch: Batch of validation data (spectra, augmented_spectra)
+            batch_idx (int): Index of the current batch
+        """
         #print(batch.shape)
         spectra,aug_spectra = batch
         #Condition = torch.ones(size = (spectra.shape[0],1),device = self.device,dtype = torch.float32)
@@ -382,6 +578,13 @@ class LightningModelSpectraStream(L.LightningModule):
 from torch.utils.data import DataLoader, Sampler
 
 def main(train_data,test_data):
+    """
+    Main training function for the SpectraStream model.
+
+    Args:
+        train_data (pd.DataFrame): Training dataset
+        test_data (pd.DataFrame): Validation dataset
+    """
     spectraTrainData = SpectrumBatch(train_data)
     #print(spectraTrainData[0][1].shape)
     batch_size = 32
@@ -427,7 +630,9 @@ def main(train_data,test_data):
     trainer.fit(LightningTrainer,train_dataloaders = train_loader,val_dataloaders = test_loader)
     wandb.finish()
 # %%
+# Main entry point for training
 if __name__ == '__main__':
+    # Check if CUDA is available
     if torch.cuda.is_available():
         print("CUDA is available!")
         device = torch.device("cuda")

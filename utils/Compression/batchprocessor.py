@@ -4,8 +4,20 @@ import torch
 import numpy as np
 
 class SpectrumBatchEncoder():
+    """
+    Class for encoding batches of mass spectra using a neural network model.
+    """
 
     def __init__(self, mzList, intensityList,model,chimeric = False):
+        """
+        Initialize the SpectrumBatchEncoder.
+
+        Args:
+            mzList (list): List of m/z arrays for each spectrum
+            intensityList (list): List of intensity arrays for each spectrum
+            model: Neural network model for encoding
+            chimeric (bool): Whether to detect and handle chimeric spectra
+        """
         self.mzList = mzList
         self.intensityList = intensityList
         self.model = model
@@ -15,9 +27,21 @@ class SpectrumBatchEncoder():
         self.chimericIdxList = []
 
     def __len__(self):
+        """
+        Return the number of spectra in the batch.
+
+        Returns:
+            int: Number of spectra
+        """
         return len(self.mzList)
     
     def formBatch(self,**kwargs):
+        """
+        Convert m/z and intensity lists to a batch tensor for model input.
+
+        Args:
+            **kwargs: Additional keyword arguments (currently unused)
+        """
         BatchList = []
         MaxValList = []
         for i in range(len(self.mzList)):
@@ -27,14 +51,18 @@ class SpectrumBatchEncoder():
             MaxValList.append(MaxVal)
         self.Batch =  torch.unsqueeze(torch.vstack(BatchList),dim = 1)
         self.MaxValList = MaxValList
-
-    # def getReconstructSpectra(self):
-    #     self.formBatch()
-    #     with torch.no_grad():
-    #         output_spectra, _, _ = self.model(self.Batch.to(self.device))
-    #         return output_spectra
     
     def getReconstructIndices(self,outputOutOfRange = False,quantizer = 6):
+        """
+        Encode spectra and return vector quantized indices.
+
+        Args:
+            outputOutOfRange (bool): Whether to return out-of-range peaks separately
+            quantizer (int): Number of quantizers to use
+
+        Returns:
+            torch.Tensor or tuple: Encoded indices, optionally with chimeric data
+        """
         self.formBatch()
         with torch.no_grad():
             inputBatch = self.Batch.to(self.device)
@@ -63,8 +91,21 @@ class SpectrumBatchEncoder():
         return codes
 
 class SpectrumBatchDecoder():
+    """
+    Class for decoding vector quantized indices back to mass spectra.
+    """
 
     def __init__(self, indicesArr,model, leftovermzList = [], leftoverintensityList = [],MaxValList = []):
+        """
+        Initialize the SpectrumBatchDecoder.
+
+        Args:
+            indicesArr: Array of vector quantized indices
+            model: Neural network model for decoding
+            leftovermzList (list): List of leftover m/z values (optional)
+            leftoverintensityList (list): List of leftover intensity values (optional)
+            MaxValList (list): List of maximum values for each spectrum
+        """
         '''
         indicesList: List of indices for the codebook; len(indicesList)  = Length '''
         self.leftmzList = leftovermzList
@@ -75,9 +116,21 @@ class SpectrumBatchDecoder():
         self.MaxValList = MaxValList if len(MaxValList) > 0 else [1]*indicesArr.shape[0]
 
     def __len__(self):
+        """
+        Return the number of spectra in the batch.
+
+        Returns:
+            int: Number of spectra
+        """
         return self.indicesArr.shape[0]
     
     def getReconstructSpectrum(self):
+        """
+        Decode vector quantized indices back to mass spectra.
+
+        Returns:
+            tuple: (mz_arrays, intensity_arrays) for each decoded spectrum
+        """
         with torch.no_grad():
             if not isinstance(self.indicesArr, torch.Tensor):
                 self.indicesArr = torch.from_numpy(self.indicesArr)
@@ -85,13 +138,16 @@ class SpectrumBatchDecoder():
             # print(spectrum.shape)
         return self.postprocessingSpectrum(spectrum.cpu().squeeze().numpy())
     
-    # def getReconstructSpectra(self):
-    #     self.formBatch()
-    #     with torch.no_grad():
-    #         output_spectra, _, _ = self.model(self.Batch.to(self.device))
-    #         return output_spectra
-    
     def postprocessingSpectrum(self,spectrum):
+        """
+        Post-process decoded spectra to convert back to m/z and intensity arrays.
+
+        Args:
+            spectrum: Decoded spectrum tensor
+
+        Returns:
+            tuple: (mz_arrays, intensity_arrays) for each processed spectrum
+        """
         output_mzList,output_intensityList = [],[]
         for j in range(spectrum.shape[0]):
             output_mz,output_intensity = SpectraLoading.VectorToMassSpectrum(spectrum[j,:],self.MaxValList[j],bin_size = 0.1,threshold = 1e-4,min_mz = 150,AlterMZ=False,returnNumpy=True)#1e-3

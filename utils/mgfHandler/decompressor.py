@@ -11,6 +11,19 @@ DEFAULTMGFPARAMSKEYS = ['title','rtinseconds','pepmass','charge','scans','seq','
 class MGFDecompressor():
     def __init__(self,model,inputFileName,outputfilemgf = None, batch_size = None,quantizer = 6, store_chimeric = True,
                  gzip_compression_level = None,zlib_compression_level = 6):
+        """
+        Initialize the MGFDecompressor for decompressing mass spectrometry data.
+
+        Args:
+            model: Neural network model for decoding spectra
+            inputFileName (str): Path to the compressed input file (.vqms2 format)
+            outputfilemgf (str, optional): Path for output MGF file. Defaults to 'output.mgf'.
+            batch_size (int, optional): Number of spectra to process in each batch. Defaults to 128.
+            quantizer (int): Number of quantization levels used during compression. Defaults to 6.
+            store_chimeric (bool): Whether to process chimeric spectra. Defaults to True.
+            gzip_compression_level (int, optional): Compression level for gzip. Defaults to None.
+            zlib_compression_level (int): Compression level for zlib. Defaults to 6.
+        """
         self.model = model
         if outputfilemgf is None:
             self.OutputFileMGF = 'output.mgf'
@@ -43,6 +56,15 @@ class MGFDecompressor():
     
     @staticmethod
     def changeSpectrumName(name):
+        """
+        Modify spectrum name to indicate it's a chimeric spectrum.
+
+        Args:
+            name (str): Original spectrum name
+
+        Returns:
+            str: Modified spectrum name with '_chimeric' suffix added to the first part
+        """
         name_chunks = name.split('.')
         name_chunks[0] += '_chimeric'
         name = '.'.join(name_chunks)
@@ -50,6 +72,13 @@ class MGFDecompressor():
 
     # Mode 1: Load All Spectra, then perform decompression
     def DecompressAll(self):
+        """
+        Decompress all spectra from compressed format to MGF.
+
+        This method loads all compressed codes and metadata, then decodes them
+        back to m/z and intensity arrays using the neural network model.
+        All spectra are processed in memory at once.
+        """
         self.CodesList = []
         df_metadata = pd.read_parquet(self.metadataFileName,engine='fastparquet')
         for metaDataBatch in range(df_metadata.shape[0]):
@@ -71,6 +100,17 @@ class MGFDecompressor():
 
     # Mode 2: Load Spectra in Batches, then perform decompression
     def Decompress(self,verbose = 0):
+        """
+        Decompress compressed spectra to MGF format using batch-wise processing.
+
+        This method processes spectra in batches to manage memory usage efficiently.
+        It reads compressed codes and metadata, decodes them back to m/z and intensity
+        arrays, and writes the reconstructed spectra to an MGF file. Also handles
+        chimeric spectra if they were stored during compression.
+
+        Args:
+            verbose (int): Verbosity level for progress reporting. Defaults to 0.
+        """
         # self.CodesList = []
         df_metadata = pd.read_parquet(self.metadataFileName,engine='fastparquet')
         for idx in range(0,df_metadata.shape[0],self.batch_size):
