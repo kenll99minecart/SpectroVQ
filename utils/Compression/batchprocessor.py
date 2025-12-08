@@ -8,7 +8,7 @@ class SpectrumBatchEncoder():
     Class for encoding batches of mass spectra using a neural network model.
     """
 
-    def __init__(self, mzList, intensityList,model,chimeric = False):
+    def __init__(self, mzList, intensityList,model,compounded = False):
         """
         Initialize the SpectrumBatchEncoder.
 
@@ -22,9 +22,9 @@ class SpectrumBatchEncoder():
         self.intensityList = intensityList
         self.model = model
         self.device = next(self.model.parameters()).device
-        self.chimeric = chimeric
-        self.chimericCodes = []
-        self.chimericIdxList = []
+        self.compounded = compounded
+        self.compoundedCodes = []
+        self.compoundedIdxList = []
 
     def __len__(self):
         """
@@ -45,9 +45,9 @@ class SpectrumBatchEncoder():
         BatchList = []
         MaxValList = []
         for i in range(len(self.mzList)):
-            MSspectra,MaxVal = SpectraLoading.massSpectrumToVector(self.mzList[i],self.intensityList[i], bin_size = 0.1,SPECTRA_DIMENSION=13500,rawIT = False,Mode = 'sqrt',mean0 = False,CenterIntegerBins=False,AlterMZ=False
-                                           ,GenerateMZList=False,MZDiff = False,mzRange = [150,1500])
-            BatchList.append(torch.unsqueeze(MSspectra,dim = 0))
+            MSspectra,MaxVal = SpectraLoading.massSpectrumToVector(self.mzList[i],self.intensityList[i], bin_size = 0.1,SPECTRA_DIMENSION=13500,rawIT = False,Mode = None,mean0 = False,CenterIntegerBins=False,AlterMZ=False
+                                        ,GenerateMZList=False,MZDiff = False,mzRange = [150,1500])
+            BatchList.append(torch.unsqueeze(torch.sqrt(MSspectra),dim = 0))
             MaxValList.append(MaxVal)
         self.Batch =  torch.unsqueeze(torch.vstack(BatchList),dim = 1)
         self.MaxValList = MaxValList
@@ -66,17 +66,23 @@ class SpectrumBatchEncoder():
         self.formBatch()
         with torch.no_grad():
             inputBatch = self.Batch.to(self.device)
-            if self.chimeric:
-                OutputFullSpectra, _,_ = self.model.forwardWithnumQuantizers(inputBatch,16)
-                OutputFullSpectra = rescaleSpectra(OutputFullSpectra,dim = 2)
-                NumberOfPeaksPortion = torch.sum((OutputFullSpectra > 1e-2)&(inputBatch > 1e-2),dim = 2) / torch.sum(inputBatch > 1e-2,dim = 2)
-                residual_spectra = torch.where((inputBatch > 1e-2)&(OutputFullSpectra < 1e-2),inputBatch,0)
-                residual_spectra = rescaleSpectra(residual_spectra,dim = 2)
+            sqinputBatch = torch.square(inputBatch)
+            if self.compounded:
+                # Process the output spectra
+                output_spectra, _,_ = self.model.forwardWithnumQuantizers(inputBatch,quantizer)
+                output_spectra = rescaleSpectra(output_spectra,dim = 2)
+                output_spectra = torch.square(output_spectra)
+                output_spectra = torch.where(output_spectra < 1e-3,torch.zeros_like(output_spectra),output_spectra)
+                torch.save(output_spectra,'/home/james/SpectroVQ/test2.tensor')
+                # Calculate the peaks portion
+                NumberOfPeaksPortion = torch.sum((output_spectra > 1e-1)&(sqinputBatch > 1e-3),dim = 2) / torch.sum(inputBatch > 1e-3,dim = 2)
+                residual_spectra = torch.where((sqinputBatch > 1e-3)&(output_spectra < 1e-1),sqinputBatch,0)
+                residual_spectra = torch.sqrt(rescaleSpectra(residual_spectra,dim = 2))
                 _, ChimericCodes,_,_ = self.model.encode(residual_spectra,returnCodebookIndices = True,returnAll = True,numquantizer = quantizer)
                 for i in range(len(self.mzList)):
-                    if NumberOfPeaksPortion[i] < 0.6:
-                        self.chimericCodes.append(ChimericCodes[:,i,:])
-                        self.chimericIdxList.append(i)
+                    if NumberOfPeaksPortion[i] < 0.5:
+                        self.compoundedCodes.append(ChimericCodes[:,i,:])
+                        self.compoundedIdxList.append(i)
             _, codes, _, _ = self.model.encode(inputBatch,returnCodebookIndices = True,returnAll = True,numquantizer = quantizer)
             if outputOutOfRange:
                 output_mz, output_intensity = [],[]
@@ -85,9 +91,12 @@ class SpectrumBatchEncoder():
                     missingidx = (original_mz < 150) | (original_mz >= 1500)
                     output_mz.append(original_mz[missingidx])
                     output_intensity.append(original_intensity[missingidx])
-                return codes,output_mz,output_intensity
-            if self.chimeric:
-                return codes, self.chimericCodes, self.chimericIdxList
+                if self.compounded:
+                    return codes,self.compoundedCodes, self.compoundedIdxList,output_mz,output_intensity
+                else:
+                    return codes,output_mz,output_intensity
+            if self.compounded:
+                return codes, self.compoundedCodes, self.compoundedIdxList, 'dummy'
         return codes
 
 class SpectrumBatchDecoder():
@@ -124,7 +133,7 @@ class SpectrumBatchDecoder():
         """
         return self.indicesArr.shape[0]
     
-    def getReconstructSpectrum(self):
+    def getReconstructSpectrum(self,addedIndices:np.ndarray = None):
         """
         Decode vector quantized indices back to mass spectra.
 
@@ -135,7 +144,23 @@ class SpectrumBatchDecoder():
             if not isinstance(self.indicesArr, torch.Tensor):
                 self.indicesArr = torch.from_numpy(self.indicesArr)
             spectrum = self.model.reconstructIndices(self.indicesArr.to(self.device))
-            # print(spectrum.shape)
+            
+            if addedIndices is not None:
+                if not isinstance(addedIndices, torch.Tensor):
+                    addedIndices = torch.from_numpy(addedIndices)
+                Originalspectrum = self.model.reconstructIndices(addedIndices.to(self.device))
+                Originalspectrum = rescaleSpectra(Originalspectrum,dim = 2)
+                Originalspectrum = torch.square(Originalspectrum)
+                Originalspectrum = torch.where(Originalspectrum < 1e-3,torch.zeros_like(Originalspectrum),Originalspectrum)
+                temp_spectra_o = torch.square(rescaleSpectra(spectrum,dim = 2))
+                temp_spectra = torch.where(temp_spectra_o < 5e-3,torch.zeros_like(temp_spectra_o),temp_spectra_o)
+                temp_spectra = torch.where(((temp_spectra > 1e-2) & (temp_spectra < 5e-1)),temp_spectra*3,temp_spectra)
+                spectrum = torch.clip(Originalspectrum*1.0 + temp_spectra*0.4,0,1)
+                torch.save(Originalspectrum,'/home/james/SpectroVQ/test.tensor')
+            else:
+                spectrum = rescaleSpectra(spectrum,dim = 2)
+                spectrum = torch.square(spectrum)
+                spectrum = torch.where(spectrum < 1e-3,torch.zeros_like(spectrum),spectrum)
         return self.postprocessingSpectrum(spectrum.cpu().squeeze().numpy())
     
     def postprocessingSpectrum(self,spectrum):
@@ -151,19 +176,20 @@ class SpectrumBatchDecoder():
         output_mzList,output_intensityList = [],[]
         for j in range(spectrum.shape[0]):
             output_mz,output_intensity = SpectraLoading.VectorToMassSpectrum(spectrum[j,:],self.MaxValList[j],bin_size = 0.1,threshold = 1e-4,min_mz = 150,AlterMZ=False,returnNumpy=True)#1e-3
-            output_intensity = list(output_intensity.astype(np.float64)**2)
-            output_mz = list(np.round(output_mz.astype(np.float64),6))# + 0.05
-            if self.leftmzList:
-                if (self.leftmzList[self.leftmzList >= 1500].shape[0] > 0) & (any([mz == 1499.95 for mz in output_mz])):
+            output_intensity = list(output_intensity.astype(np.float32))
+            output_mz = list(np.round(output_mz.astype(np.float32)+ 0.055 ,6))# + 0.05
+            if len(self.leftmzList) > 0:
+                leftmzArr = np.array(self.leftmzList[j])
+                if (leftmzArr[leftmzArr >= 1500].shape[0] > 0) & (any([mz == 1499.95 for mz in output_mz])):
                     #print('removing peaks at 1499.95')
                     output_intensity.pop(output_mz.index(1499.95))
                     output_mz.pop(output_mz.index(1499.95))
-                output_mz.extend(self.leftmzList)
-                output_intensity.extend(self.leftintensityList)
+                output_mz.extend(list(leftmzArr))
+                output_intensity.extend(self.leftintensityList[j])
             sortedidx = np.argsort(output_mz)
-            output_mz = np.array(output_mz,np.float64)[sortedidx]
-            output_intensity = np.array(output_intensity,np.float64)[sortedidx]
-            thresholdix = output_intensity > np.max(output_intensity)*0.001 #Clear small mz values
+            output_mz = np.array(output_mz,np.float32)[sortedidx]
+            output_intensity = np.array(output_intensity,np.float32)[sortedidx]
+            thresholdix = output_intensity > np.max(output_intensity)*0.01 #Clear small mz values for 1 percent mz
             output_mz,output_intensity = output_mz[thresholdix],output_intensity[thresholdix]
             
             output_mzList.append(output_mz)

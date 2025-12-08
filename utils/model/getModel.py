@@ -1,11 +1,10 @@
 from . import modelStream
 import torch
 import yaml
-DEFAULTPARAMS = {'inputChannel': 1, 'n_q':16, 'n_filters': 32,'n_residual_layers': 1, 'lstm': 0, 'ratios':[9,7,6,2] , 'final_activation': 'Sigmoid',
+DEFAULTPARAMS = {'inputChannel': 1, 'n_q':12, 'n_filters': 32,'n_residual_layers': 1, 'lstm': 0, 'ratios':[9,7,4,2] , 'final_activation': 'Sigmoid',
                 'residual_kernel_size': 6,'codebook_size':1024, 'FiLMEncoder' : False, 'FiLMDecoder' :False,'flattenQuantization' : False,
-                'quantizationdim': 512, 'biLSTM': False,'causal':False,'useQINCo':False,'inputSize' : 13500,'dimension':512,'kernel_size':11, 
-                'encoders':False,'bucketTransform':False,'applyquantizerdroput':False,'transformer':8}
-
+                'quantizationdim': 256, 'biLSTM': False,'causal':False,'useQINCo':False,'inputSize' : 13500,'dimension':256,'kernel_size':8, 
+                'encoders':False,'bucketTransform':False,'applyquantizerdroput':False,'transformer':6}
 def getModel(yaml_file=None):
     '''
     Load the model from the yaml file

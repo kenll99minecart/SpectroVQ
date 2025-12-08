@@ -13,8 +13,8 @@ def normalizeMS(it):
 
 def massSpectrumToVector(mz_list,intensity_list,bin_size = 0.1,SPECTRA_DIMENSION = 20000, rawIT = True, mean0 = True, Mode = 'log',cap1 = True,returntorch = True,device = 'cpu',AlterMZ = True,CenterIntegerBins = True,GenerateMZList = False
                          ,MZDiff = False, mzRange:list = [None,None]):
-    intensity_list = np.asarray(intensity_list,dtype = np.float32)
-    mz_list = np.asarray(mz_list,dtype = np.float32)
+    intensity_list = np.array(intensity_list,dtype = np.float32)
+    mz_list = np.array(mz_list,dtype = np.float32)
     assert mz_list.shape[0] == intensity_list.shape[0]
     if not rawIT:
         if Mode == 'log':
@@ -25,6 +25,11 @@ def massSpectrumToVector(mz_list,intensity_list,bin_size = 0.1,SPECTRA_DIMENSION
             Minval = 0
         else:
             Minval = 0
+        if intensity_list.shape[0] == 0:
+            if returntorch:
+                return torch.zeros(SPECTRA_DIMENSION,device = device),0
+            else:
+                return np.zeros(SPECTRA_DIMENSION),0
         Maxval = np.max(intensity_list)
         # Minval = np.min(intensity_list)
         # Minval = np.clip(Minval,-np.inf,0)
@@ -42,7 +47,12 @@ def massSpectrumToVector(mz_list,intensity_list,bin_size = 0.1,SPECTRA_DIMENSION
         idx = mz_list < mzRange[1]
         mz_list = mz_list[idx]
         intensity_list = intensity_list[idx]
-
+    if len(mz_list) == 0:
+        if returntorch:
+            return torch.zeros(SPECTRA_DIMENSION,device = device),0
+        else:
+            return np.zeros(SPECTRA_DIMENSION),0
+    
     if GenerateMZList:
         OriginalMZ = mz_list
         if returntorch:

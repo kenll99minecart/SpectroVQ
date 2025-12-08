@@ -1,7 +1,6 @@
 # This implementation is inspired from
 # https://github.com/facebookresearch/encodec
-# which is released under MIT License. Hereafter, the original license:
-# MIT License
+# which is released under MIT License.
 import math
 from pathlib import Path
 import typing as tp
@@ -10,8 +9,9 @@ import numpy as np
 import torch
 from torch import nn
 
-from . import quantization as qt 
-from . import modules as m # 
+from . import quantization as qt # from .
+from . import modules as m # from .
+# from model_qinco import QINCo
 #from utils import _check_checksum, _linear_overlap_add, _get_checkpoint_url
 
 # Alternate implmentation of the modelStream class
@@ -121,8 +121,8 @@ class VQMSStream(nn.Module):
             self.NumBuckets = NumBucket
             self.quantization = qt.ResidualVectorQuantization(num_quantizers=n_q, codebook_size=codebook_size,dim = self.quantizationdim, kmeans_init=kmeans_init,
                 kmeans_iters=kmeans_iters,threshold_ema_dead_code=threshold_ema_dead_code,l2norm = quantl2)
-            if useQINCo:
-                self.quantization = QINCo(d = self.quantizationdim, K = codebook_size, L = 1, M = n_q, h = 64)
+            # if useQINCo:
+            #     self.quantization = QINCo(d = self.quantizationdim, K = codebook_size, L = 1, M = n_q, h = 64)
         else:
             self.quantization = nn.Identity()
         
@@ -140,23 +140,43 @@ class VQMSStream(nn.Module):
                 nn.ELU(),
             )
 
-    def forward(self,input,FiLM_input = None,returnAll = False,use_vq = True,returnQuantization = False):
+    def forward(self,input,FiLM_input = None,returnAll = False,use_vq = True):
         x = self.encoder(input,FiLM_input)
+        
+        #if (FiLM_input is not None) & (hasattr(self,'FiLMlayers')):
+            # if (self.FiLMparams['Last_layer_only']):
+            #     FiLM_output1 = self.FiLMlayers[0](FiLM_input)
+            #     FiLM_gamma1, FiLM_beta1 = FiLM_output1[:,0].unsqueeze(-1).unsqueeze(-1), FiLM_output1[:,1].unsqueeze(-1).unsqueeze(-1)
+            #     FiLM_gamma1,FiLM_beta1 = FiLM_gamma1.repeat(1,x.shape[1],1), FiLM_beta1.repeat(1,x.shape[1],1)
+            #     # print('gamma:',FiLM_gamma1.shape)
+            #     # print('beta:',FiLM_beta1.shape)
+            #     # print('embed:',x.shape)
+            #     x = x * FiLM_gamma1 + FiLM_beta1
         if use_vq:
             # random dropout: https://kyutai.org/Moshi.pdf
             if self.quantizationdim is not None:
                 if self.flattenQuantization:
                     original_shape = x.shape
-                    # x = x.reshape(x.shape[0],-1,1)
+                    x = x.view(x.shape[0],-1,1)
                 elif self.bucketTransform:
                     if hasattr(self,'pad'):
                         self.unpadded_shape = x.shape
                         x = self.pad(x)
                     original_shape = x.shape
+                    # u = torch.zeros(x.shape[0],self.quantizationdim,x.shape[2]//self.NumBuckets)
+                    # for i in range(x.shape[2]):
+                    #     dim1 = (i*original_shape[1])%self.quantizationdim
+                    #     dim2 = dim1 + original_shape[1]
+                    #     u[:,dim1:dim2,
+                    #     (i*original_shape[1])//self.quantizationdim] += x[:,:,i]
+                    # print(torch.eq(u,x.transpose(1,2).reshape(x.shape[0],x.shape[2]//self.NumBuckets,self.quantizationdim).transpose(1,2)).all())
+                    # Underlying logic
+                    # Input shape [B,C,L]
+                    # Output shape [B,C*NumBuckets,L//NumBuckets]
                     x = x.transpose(1,2).reshape(x.shape[0],x.shape[2]//self.NumBuckets,self.quantizationdim).transpose(1,2)
                 else:
                     original_shape = x.shape
-                    # x = x.reshape(x.shape[0],self.quantizationdim,-1)
+                    x = x.view(x.shape[0],self.quantizationdim,-1)
                 
                 if hasattr(self,'mlpencoder'):
                     x = self.mlpencoder(x)
@@ -173,28 +193,32 @@ class VQMSStream(nn.Module):
                 if hasattr(self,'mlpdecoder'):
                     quantized = self.mlpdecoder(quantized)
                 if self.flattenQuantization:
-                    quantized = quantized.reshape(original_shape[0],original_shape[1],original_shape[2])
+                    quantized = quantized.view(original_shape[0],original_shape[1],original_shape[2])
                 elif self.bucketTransform:
+                    # u = torch.zeros(original_shape[0],original_shape[1],original_shape[2])
+                    # for i in range(original_shape[2]):
+                    #     dim1 = (i*original_shape[1])%self.quantizationdim
+                    #     dim2 = dim1 + original_shape[1]
+                    #     u[:,:,i] += quantized[:,dim1:dim2,
+                    #                           (i*original_shape[1])//self.quantizationdim]
+                    # print(torch.eq(u,quantized.transpose(1,2).reshape(original_shape[0],original_shape[2],original_shape[1]).transpose(1,2)).all())
                     quantized = quantized.transpose(1,2).reshape(original_shape[0],original_shape[2],original_shape[1]).transpose(1,2)
                     if hasattr(self,'unpadded_shape'):
                         quantized = quantized[:,:,:self.unpadded_shape[2]]
-                else:
-                    pass
             else:
                 quantized = x
                 BeforeQuantization = None
-                out_losses = torch.tensor(0.0)
+                out_losses = 0
         else:
             quantized = x
             BeforeQuantization = None
-            out_losses = torch.tensor(0.0)
+            out_losses = 0
+
         x = self.decoder(quantized,FiLM_input)
         if x.shape[2] != input.shape[2]:
             x = x[:,:,:input.shape[2]]
         if returnAll:
             return x,out_losses, out_Indices
-        if returnQuantization:
-            return x,out_losses, BeforeQuantization,quantized
         return x,out_losses, BeforeQuantization
     
     def __getCodebook__(self,x):
@@ -275,8 +299,35 @@ class VQMSStream(nn.Module):
             if hasattr(self,'mlpencoder'):
                 x = self.mlpencoder(x)
             BeforeQuantization = x
-        embedding, _, qLoss = self.quantization.encodeWithLoss(x,n_q)
+        embedding, _, qLoss = self.quantization(x,n_q)
         decoded = self.decoder(embedding)
         if decoded.shape[2] != input_shape[2]:
             decoded = decoded[:,:,:input_shape[2]]
         return decoded, qLoss, BeforeQuantization
+
+
+if __name__ == '__main__':
+    import os
+    os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+    model_kwargs ={'inputChannel': 1, 'n_q':16, 'n_filters': 32,'n_residual_layers': 1, 'lstm': 0, 'ratios':[8, 5, 4, 2] , 'final_activation': 'Sigmoid',
+                'codebook_size':1024, 'FiLMEncoder' : False, 'FiLMDecoder' :False,'flattenQuantization' : False,
+                'biLSTM': False,'causal':False,'useQINCo':False,'inputSize' : 13500,'dimension':128,
+                'encoders':False,'bucketTransform':False,'applyquantizerdroput':True,'transformer':8}
+#     {'n_q': 12,
+#  'n_residual_layers': 2,
+#  'codebook_size': 1541,
+#  'quantizationdim': 62,
+#  'learning_rate': 7.481581992440448e-05,
+#  'stride1': 10,
+#  'stride2': 5,
+#  'stride3': 3,
+#  'stride4': 1,
+#  'LSTM': 1,
+#  'weightSE': 2.4429485623013045,
+#  'weightCS': 0.34894040433259055}
+    model = VQMSStream(**model_kwargs)
+    model.to('cuda')
+    # print(model.encoder(torch.randn(16,1,13500,device='cuda'))[0].shape)
+    model(torch.randn(16,1,13500,device='cuda')) #,FiLM_input = torch.randn(16,1,13500,device='cuda'))
+
+    # %%
