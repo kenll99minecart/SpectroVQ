@@ -14,7 +14,7 @@ class SpectrumBatch(Dataset):
         return self.length
 
     def __getitem__(self, idx):
-        MSspectra,MaxVal = SpectraLoading.massSpectrumToVector(self.Xmz.iloc[idx],self.Xintensity.iloc[idx], bin_size = 0.1,SPECTRA_DIMENSION=13500,rawIT = False,Mode = None,mean0 = False,CenterIntegerBins=False,AlterMZ=False
+        MSspectra,MaxVal = SpectraLoading.massSpectrumToVector(self.Xmz[idx],self.Xintensity[idx], bin_size = 0.1,SPECTRA_DIMENSION=13500,rawIT = False,Mode = None,mean0 = False,CenterIntegerBins=False,AlterMZ=False
                                         ,GenerateMZList=False,MZDiff = False,mzRange = [150,1500])
         return torch.sqrt(torch.unsqueeze(MSspectra,dim = 0)),MaxVal
 
@@ -31,28 +31,28 @@ class SpectrumTorchBatchEncoder():
         self.compoundedCodes = []
         self.compoundedCodesIdx = []
         self.MaxValList = []
-
+        self.mzList, self.intensityList = mzList, intensityList
+        
     def getReconstructIndices(self,outputOutOfRange = False,quantizer = 6,batch_size = 128, num_workers = 16):
         DataLoaderBatch = DataLoader(self.dataset,batch_size = batch_size,shuffle = False,num_workers = num_workers,drop_last = False)
         CodeList = []
+        if outputOutOfRange:
+            extendedmz,extendedit = [], []
         with torch.no_grad():
             for batchidx, (inputBatch, MaxVal) in enumerate(DataLoaderBatch):
                 self.MaxValList.extend(MaxVal.numpy().tolist())
                 inputBatch = inputBatch.to(self.device)
+                sqinputBatch = torch.square(inputBatch)
                 if self.compounded:
+                    # Process the output spectra
                     output_spectra, _,_ = self.model.forwardWithnumQuantizers(inputBatch,quantizer)
-                    NumberOfPeaksPortion = torch.sum((output_spectra > 1e-1)&(inputBatch > 1e-3),dim = 2) / torch.sum(inputBatch > 1e-3,dim = 2)
-                    residual_spectra = torch.where((inputBatch > 1e-3)&(output_spectra < 1e-1),inputBatch,0)
+                    output_spectra = rescaleSpectra(output_spectra,dim = 2)
+                    output_spectra = torch.square(output_spectra)
+                    output_spectra = torch.where(output_spectra < 1e-3,torch.zeros_like(output_spectra),output_spectra)
+                    # Calculate the peaks portion
+                    NumberOfPeaksPortion = torch.sum((output_spectra > 1e-1)&(sqinputBatch > 1e-3),dim = 2) / torch.sum(inputBatch > 1e-3,dim = 2)
+                    residual_spectra = torch.where((sqinputBatch > 1e-3)&(output_spectra < 1e-1),sqinputBatch,0)
                     residual_spectra = torch.sqrt(rescaleSpectra(residual_spectra,dim = 2))
-                    # temp_spectra, _,_ = SpectraStream.forwardWithnumQuantizers(residual_spectra,quantizer)
-                    # temp_spectra_o = torch.square(rescaleSpectra(temp_spectra,dim = 2))
-                    # temp_spectra = torch.where(temp_spectra_o < 5e-3,torch.zeros_like(temp_spectra_o),temp_spectra_o)
-                    # temp_spectra = torch.where(((temp_spectra > 1e-2) & (temp_spectra < 5e-1)),temp_spectra*3,temp_spectra)
-                    # for u in range(NumberOfPeaksPortion.shape[0]):
-                    #     NumPeaksSingle = NumberOfPeaksPortion[u].item()
-                    #     # pass the spectrum if below threshold
-                    #     if NumPeaksSingle < 0.5:
-                    #         output_spectra[u,:] = torch.clip(output_spectra[u,:]*1.0 + temp_spectra[u,:]*0.4,0,1)
                     _, ChimericCodes,_,_ = self.model.encode(residual_spectra,returnCodebookIndices = True,returnAll = True,numquantizer = quantizer)
                     for i in range(residual_spectra.shape[0]):
                         if NumberOfPeaksPortion[i] < 0.5:
@@ -61,17 +61,19 @@ class SpectrumTorchBatchEncoder():
                 _, codes, _, _ = self.model.encode(inputBatch,returnCodebookIndices = True,returnAll = True,numquantizer = quantizer)
                 CodeList.append(codes.cpu())
 
-                # TODO: incoporate out of range handling
                 if outputOutOfRange:
-                    output_mz, output_intensity = [],[]
-                    for i in range(len(self.mzList)):
-                        original_mz, original_intensity = np.array(self.mzList[i]),np.array(self.intensityList[i])
+                    for i in range(inputBatch.shape[0]):
+                        original_mz, original_intensity = np.array(self.mzList[batchidx * batch_size + i]),np.array(self.intensityList[batchidx * batch_size + i])
                         missingidx = (original_mz < 150) | (original_mz >= 1500)
-                        output_mz.append(original_mz[missingidx])
-                        output_intensity.append(original_intensity[missingidx])
-                    return codes,output_mz,output_intensity
-                
-                finalCode = torch.concat(CodeList,dim = 1)
+                        extendedmz.append(original_mz[missingidx])
+                        extendedit.append(original_intensity[missingidx])
+            finalCode = torch.concat(CodeList,dim = 1)
+            
+        if (self.compounded) & (outputOutOfRange):
+            return codes,self.compoundedCodes, self.compoundedCodesIdx,extendedmz,extendedit
+        else:
             if self.compounded:
-                return finalCode, self.compoundedCodes, self.compoundedCodesIdx
+                return codes,self.compoundedCodes, self.compoundedCodesIdx, 'dummy'
+            if outputOutOfRange:
+                return codes,extendedmz,extendedit
         return finalCode

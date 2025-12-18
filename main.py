@@ -27,41 +27,65 @@ SpectraStream = getModel.ApplyWeights(SpectraStream,'/home/james/ResidualVector/
 SpectraStream.to('cuda')
 SpectraStream.eval()
 # %%
+import time
 # Initialize MGF compressor with specific parameters for spectrum compression
-mgfcompressor = MGFCompressor(mgfFilePath='/data/data/PXD028735/LFQ_Orbitrap_DDA_Ecoli_01.mgf',OutputFileName='/data3/james/LFQ_Orbitrap_DDA_Ecoli_01',model=SpectraStream,batch_size=128,quantizer=3,store_compounded = True)
+mgfcompressor = MGFCompressor(mgfFilePath='/data/data/PXD028735/LFQ_Orbitrap_DDA_Ecoli_02.mgf',OutputFileName='/data3/james/LFQ_Orbitrap_DDA_Ecoli_02',model=SpectraStream,batch_size=128,quantizer=3,store_compounded = True)
 # Perform compression with verbose output and debug mode enabled
-mgfcompressor.Compress(verbose = 1,debug = True)
+start = time.time()
+mgfcompressor.CompressAll(verbose = 1,debug = True)
+end = time.time()
+print(f"Compression time: {end - start} seconds")
+# %%
+mgfcompressor2 = MGFCompressor(mgfFilePath='/data/data/PXD028735/LFQ_Orbitrap_DDA_Ecoli_02.mgf',OutputFileName='/data3/james/LFQ_Orbitrap_DDA_Ecoli_02_Original',model=SpectraStream,batch_size=128,quantizer=3,store_compounded = True)
+# Perform compression with verbose output and debug mode enabled
+start = time.time()
+mgfcompressor2.Compress(verbose = 1,debug = True)
+end = time.time()
+print(f"Compression time: {end - start} seconds")
+# %%
+import os 
+filepath = '/data/data/PXD028735/'
+for file in os.listdir(filepath):
+    if ('Orbitrap' in file) & (file.endswith('mgf')):
+        fullpath = os.path.join(filepath,file)
+        print(f'Compressing {file}')
+        mgfcompressor = MGFCompressor(mgfFilePath=fullpath,OutputFileName=f'/data3/james/{file}',model=SpectraStream,batch_size=128,quantizer=3,store_compounded = True)
+        # Perform compression with verbose output and debug mode enabled
+        start = time.time()
+        mgfcompressor.CompressAll(verbose = 0,debug = False)
+        end = time.time()
+        print(f"Compression time: {end - start} seconds")
 # %%
 # Import and reload the decompressor module for spectrum decompression
-from utils.mgfHandler import decompressor
-import importlib
-importlib.reload(decompressor)
+# from utils.mgfHandler import decompressor
+# import importlib
+# importlib.reload(decompressor)
 
-# Initialize MGF decompressor to reconstruct spectra from compressed format
-mgfdecompressor = decompressor.MGFDecompressor(model=SpectraStream,inputFileName='/data3/james/LFQ_Orbitrap_DDA_Ecoli_01.vqms2',outputfilemgf='/data3/james/LFQ_Orbitrap_DDA_Ecoli_01_decompressed.mgf',batch_size=128,quantizer=3,store_compounded = True)
-# Perform decompression to reconstruct original MGF file
-mgfdecompressor.Decompress(verbose = 1)
+# # Initialize MGF decompressor to reconstruct spectra from compressed format
+# mgfdecompressor = decompressor.MGFDecompressor(model=SpectraStream,inputFileName='/data3/james/LFQ_Orbitrap_DDA_Ecoli_01.vqms2',outputfilemgf='/data3/james/LFQ_Orbitrap_DDA_Ecoli_01_decompressed.mgf',batch_size=128,quantizer=3,store_compounded = True)
+# # Perform decompression to reconstruct original MGF file
+# mgfdecompressor.Decompress(verbose = 1)
 # %%
-from pyteomics import mgf
-from matplotlib import pyplot as plt
-numSpectra = 0
-for idx, spectra in enumerate(mgf.read('/data3/james/LFQ_Orbitrap_DDA_Ecoli_01_decompressed.mgf')):
-    if idx == 4:
-        # print(spectra)
-        plt.stem(spectra['m/z array'],spectra['intensity array'])
-        print(spectra['m/z array'])
-        print(spectra['intensity array'])
-        numSpectra +=1
-        break
-plt.show()
-print(numSpectra)
-# %%
-for spectra in mgf.read('/data/data/PXD028735/LFQ_Orbitrap_DDA_Ecoli_01.mgf'):
-    plt.stem(spectra['m/z array'],spectra['intensity array'])
-    print(spectra['m/z array'])
-    print(spectra['intensity array'])
-    plt.show()
-    break
+# from pyteomics import mgf
+# from matplotlib import pyplot as plt
+# numSpectra = 0
+# for idx, spectra in enumerate(mgf.read('/data3/james/LFQ_Orbitrap_DDA_Ecoli_01_decompressed.mgf')):
+#     if idx == 4:
+#         # print(spectra)
+#         plt.stem(spectra['m/z array'],spectra['intensity array'])
+#         print(spectra['m/z array'])
+#         print(spectra['intensity array'])
+#         numSpectra +=1
+#         break
+# plt.show()
+# print(numSpectra)
+# # %%
+# for spectra in mgf.read('/data/data/PXD028735/LFQ_Orbitrap_DDA_Ecoli_01.mgf'):
+#     plt.stem(spectra['m/z array'],spectra['intensity array'])
+#     print(spectra['m/z array'])
+#     print(spectra['intensity array'])
+#     plt.show()
+#     break
 # %%
 # import torch
 # m = torch.tensor([[[  65,  574,  111,  837,  815,  207,  862,  396,  309,   34,  655,   52,
@@ -76,4 +100,17 @@ for spectra in mgf.read('/data/data/PXD028735/LFQ_Orbitrap_DDA_Ecoli_01.mgf'):
 # # %%
 # torch.save(SpectraStream.reconstructIndices(m.to('cuda')),'/home/james/SpectroVQ/test2.tensor')
 
+# %%
+import pandas as pd
+a = pd.read_parquet('/data3/james/LFQ_Orbitrap_DDA_Ecoli_02.parquet')
+b = pd.read_parquet('/data3/james/LFQ_Orbitrap_DDA_Ecoli_02_Original.parquet')
+# %%
+import pickle
+with open('/data3/james/LFQ_Orbitrap_DDA_Ecoli_02_compounded.pkl', 'rb') as f:
+    compounded_data = pickle.load(f)
+print(compounded_data)
+# %%
+with open('/data3/james/LFQ_Orbitrap_DDA_Ecoli_02_Original_compounded.pkl', 'rb') as f:
+    compounded_data = pickle.load(f)
+print(compounded_data)
 # %%

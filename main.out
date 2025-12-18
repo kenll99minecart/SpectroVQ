@@ -1,0 +1,37 @@
+/home/james/.conda/envs/DeepLearning/lib/python3.11/site-packages/psims/mzmlb/writer.py:33: UserWarning: hdf5plugin is missing! Only the slower GZIP compression scheme will be available! Please install hdf5plugin to be able to use Blosc.
+  warnings.warn(
+flattenShape: (256, 27)
+Loaded 18 spectra from /data/data/PXD028735/LFQ_Orbitrap_DDA_Ecoli_02.mgf
+Starting Compression with batch size 128 and quantizer 3
+Flushing Packer
+Compression time: 2.388364315032959 seconds
+Compressing LFQ_Orbitrap_DDA_Condition_A_Sample_Alpha_04.mgf
+Compression time: 645.7290241718292 seconds
+Compressing LFQ_Orbitrap_DDA_Condition_A_Sample_Beta_02.mgf
+Compression time: 656.7865471839905 seconds
+Compressing LFQ_Orbitrap_DDA_Yeast_03.mgf
+Compression time: 549.2487621307373 seconds
+Compressing LFQ_Orbitrap_DDA_Ecoli_02.mgf
+Compression time: 236.53060579299927 seconds
+Compressing LFQ_Orbitrap_DDA_Yeast_01.mgf
+Compression time: 567.440808057785 seconds
+Compressing LFQ_Orbitrap_DDA_Condition_A_Sample_Alpha_03.mgf
+Compression time: 666.7807533740997 seconds
+Compressing LFQ_Orbitrap_DDA_Ecoli_01.mgf
+Compression time: 259.66383838653564 seconds
+Compressing LFQ_Orbitrap_DDA_Condition_A_Sample_Beta_01.mgf
+Compression time: 647.7156269550323 seconds
+Compressing LFQ_Orbitrap_DDA_Ecoli_03.mgf
+Compression time: 245.46911549568176 seconds
+Compressing LFQ_Orbitrap_DDA_Condition_A_Sample_Alpha_01.mgf
+Compression time: 593.0155694484711 seconds
+Compressing LFQ_Orbitrap_DDA_Human_02.mgf
+Compression time: 637.1796896457672 seconds
+Compressing LFQ_Orbitrap_DDA_Yeast_02.mgf
+Compression time: 537.9586572647095 seconds
+Compressing LFQ_Orbitrap_DDA_Condition_A_Sample_Alpha_02.mgf
+Compression time: 613.1315989494324 seconds
+Compressing LFQ_Orbitrap_DDA_Human_01.mgf
+Compression time: 662.0556256771088 seconds
+Compressing LFQ_Orbitrap_DDA_Human_03.mgf
+Compression time: 633.3595552444458 seconds
