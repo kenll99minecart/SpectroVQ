@@ -40,7 +40,7 @@ class MGFDenoiser():
         self.model = model
         self.device = next(self.model.parameters()).device
         
-    def denoiseMGF(self,numQuantSingle = 6,retainOriginalPeaks = True,OnePercentThreshold = True,compoundedSpectra = True):
+    def denoiseMGF(self,numQuantSingle = 3,retainOriginalPeaks = True,OnePercentThreshold = True,compoundedSpectra = True):
         with torch.no_grad():
             file = self.inputMGF
             reader = mgf.read(file)
@@ -121,7 +121,7 @@ class MGFDenoiser():
                             output_intensity = list(output_intensity)
                         else:
                             output_mz,output_intensity = SpectraLoading.VectorToMassSpectrum(output_spectra[j,:],MaxVal[j],bin_size = 0.1,threshold = 1e-4,min_mz = 150,AlterMZ=False,returnNumpy=True)
-                            output_intensity = list(output_intensity)#**2
+                            output_intensity = list(output_intensity)
                         output_mz = list(np.round(output_mz+ 0.055 ,6))
                         if addOriginalPeaks:
                             original_mz, original_intensity = df_train.iloc[i*batch_size+j]['m/z array'], df_train.iloc[i*batch_size+j]['intensity array']
