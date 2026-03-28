@@ -70,10 +70,10 @@ class SpectrumTorchBatchEncoder():
             finalCode = torch.concat(CodeList,dim = 1)
             
         if (self.compounded) & (outputOutOfRange):
-            return codes,self.compoundedCodes, self.compoundedCodesIdx,extendedmz,extendedit
+            return finalCode,self.compoundedCodes, self.compoundedCodesIdx,extendedmz,extendedit
         else:
             if self.compounded:
-                return codes,self.compoundedCodes, self.compoundedCodesIdx, 'dummy'
+                return finalCode,self.compoundedCodes, self.compoundedCodesIdx, 'dummy'
             if outputOutOfRange:
-                return codes,extendedmz,extendedit
+                return finalCode,extendedmz,extendedit
         return finalCode

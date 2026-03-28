@@ -1,9 +1,6 @@
-import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import math
 import torch
-from tqdm import tqdm
 
 def normalizeMS(it):
     it = np.log(it)
@@ -30,10 +27,7 @@ def massSpectrumToVector(mz_list,intensity_list,bin_size = 0.1,SPECTRA_DIMENSION
                 return torch.zeros(SPECTRA_DIMENSION,device = device),0
             else:
                 return np.zeros(SPECTRA_DIMENSION),0
-        Maxval = np.max(intensity_list)
-        # Minval = np.min(intensity_list)
-        # Minval = np.clip(Minval,-np.inf,0)
-        intensity_list = (intensity_list - Minval)/(Maxval - Minval)
+        
     else:
         intensity_list = np.log(intensity_list)
         intensity_list = np.clip(intensity_list,0,np.inf)
@@ -47,6 +41,10 @@ def massSpectrumToVector(mz_list,intensity_list,bin_size = 0.1,SPECTRA_DIMENSION
         idx = mz_list < mzRange[1]
         mz_list = mz_list[idx]
         intensity_list = intensity_list[idx]
+
+    Maxval = np.max(intensity_list)
+    intensity_list = (intensity_list - Minval)/(Maxval - Minval)    
+
     if len(mz_list) == 0:
         if returntorch:
             return torch.zeros(SPECTRA_DIMENSION,device = device),0
@@ -75,18 +73,16 @@ def massSpectrumToVector(mz_list,intensity_list,bin_size = 0.1,SPECTRA_DIMENSION
         indexes = np.floor(indexes).astype('int32')
     else:
         indexes = np.around(indexes).astype('int32')
-   
-    #SPECTRA_DIMENSION  = np.max(indexes)
 
     if returntorch:
         vector = torch.zeros(SPECTRA_DIMENSION, dtype = torch.float32,device = device)
     else:
         vector = np.zeros(SPECTRA_DIMENSION, dtype='float32')
     indexes = np.clip(indexes,0,SPECTRA_DIMENSION-1)
-    #duplicated_indices = np.where(np.bincount(indexes) > 1)[0]
+
     if GenerateMZList:
         temp_it_list,temp_mz_list = [],[]
-    #Same index, add up both intensity??
+
     for i, index in enumerate(indexes):
         vector[index] += intensity_list[i]
         if GenerateMZList:
@@ -95,19 +91,16 @@ def massSpectrumToVector(mz_list,intensity_list,bin_size = 0.1,SPECTRA_DIMENSION
             if (i == (indexes.shape[0] - 1)):
                 #end case
                 assert len(temp_it_list) == len(temp_mz_list)
-                #mz_vector[index] = np.sum([temp_it_list[u]*temp_mz_list[u] for u in range(len(temp_it_list))])/sumIT
                 mz_vector[index] = temp_mz_list[np.argmax(temp_it_list)]
                 if MZDiff:
-                    mz_vector[index] = mz_vector[index]- mz_dummy_arr[index]# +0.05
+                    mz_vector[index] = mz_vector[index]- mz_dummy_arr[index]
                 temp_it_list.clear()
                 temp_mz_list.clear()
-            elif (indexes[i+1] != index):#indexes[i]
-                #sumIT = np.sum(temp_it_list)
+            elif (indexes[i+1] != index):
                 assert len(temp_it_list) == len(temp_mz_list)
-                #mz_vector[index] = np.sum([temp_it_list[u]*temp_mz_list[u] for u in range(len(temp_it_list))])/sumIT
                 mz_vector[index] = temp_mz_list[np.argmax(temp_it_list)]
                 if MZDiff:
-                    mz_vector[index] = mz_vector[index]- mz_dummy_arr[index] #+ 0.05
+                    mz_vector[index] = mz_vector[index]- mz_dummy_arr[index]
                 temp_it_list.clear()
                 temp_mz_list.clear()
 
@@ -134,9 +127,9 @@ def VectorToMassSpectrum(Spec,MaxVal, bin_size = 0.01,threshold = 1e-7, min_mz =
         MaxVal = MaxVal.detach().numpy()
     
     nonzero_indices = np.where(Spec > threshold)[0]
-    #print(nonzero_indices)
+
     intensity_list = Spec[nonzero_indices] * MaxVal
-    #print(nonzero_indices)
+
     if AlterMZ:
         alterterm = 1.00048
     else:
@@ -151,13 +144,11 @@ def VectorToMassSpectrum(Spec,MaxVal, bin_size = 0.01,threshold = 1e-7, min_mz =
 
 def CorrectMZ(mz,SPECTRA_DIMENSION,bin_size = 0.01,min_mz = 0,MZDiff = False,outputindices = False):
     mz_dummy_arr = np.arange(0,SPECTRA_DIMENSION*bin_size,bin_size)
-    #nonzero_indices = np.where(mz > threshold)[0]
-    #mz = mz[nonzero_indices]
     if MZDiff:
-        mz = mz + mz_dummy_arr#[nonzero_indices]
+        mz = mz + mz_dummy_arr
     mz =  mz* 1.00048 + min_mz
     if outputindices:
-        return mz#,nonzero_indices
+        return mz
     else:
         return mz
 
@@ -266,108 +257,3 @@ def plotRawSpectra(mz1,intensity1,mz2,intensity2,label1 = 'original',label2 = 'p
     plt.setp(stemlines2, 'linewidth', 2)
     plt.legend()
     return fig
-    #print(pairwise.cosine_similarity(spectra1.reshape(1,-1),spectra2.reshape(1,-1)))
-
-from pyteomics import pylab_aux as pa, usi
-from pyteomics import mass
-def fragmentsAA(peptide, types=('b', 'y'), maxcharge=1):
-    """
-    The function generates all possible m/z for fragments of types
-    `types` and of charges from 1 to `maxcharge`.
-    """
-    for i in range(1, len(peptide)):
-        for ion_type in types:
-            for charge in range(1, maxcharge+1):
-                if ion_type[0] in 'abc':
-                    yield mass.fast_mass(
-                            peptide[:i], ion_type=ion_type, charge=charge)
-                else:
-                    yield mass.fast_mass(
-                            peptide[i:], ion_type=ion_type, charge=charge)
-
-def GetAnnotatedPeaks(comments,charge = 2):
-    '''
-    Comments: can be str of dict
-    dict: Peak Comments
-    str: AA Sequence
-    '''
-    if isinstance(comments, dict):
-        mzList = []
-        for key,value in comments.items():
-            if value[0] != '?':
-                mzList.append(float(key))
-    elif isinstance(comments, str):
-        mzList = list(fragmentsAA(comments,maxcharge = charge))
-        #raise NotImplementedError
-    else:
-        raise NotImplementedError
-    itList = [1 for _ in range(len(mzList))]
-
-    return mzList, itList
-
-def EncodeSpectra(mz,it,delta_encoding = True,Max_length = 2048, intensityProcessing = [],mzProcessing = [], returntype = 'numpy'):
-    assert len(mz) == len(it)
-    if (len(mz) > Max_length/2) & (returntype != 'dual'):
-        print('Spectra length is greater than Max_length, truncating')
-        print(mz)
-        print(it)
-        mz = mz[:int(Max_length/2)]
-        it = it[:int(Max_length/2)]
-    elif (len(mz) > Max_length) & (returntype == 'dual'):
-        print('Spectra length is greater than Max_length, truncating')
-        print(mz)
-        print(it)
-        mz = mz[:Max_length]
-        it = it[:Max_length]
-    if ~np.all(np.diff(mz) >= 0):
-        sortedIdx = np.argsort(mz)
-        mz,it= map(lambda x: np.array(x)[sortedIdx], [mz,it])
-    if delta_encoding:
-        mz = np.concatenate([[mz[0]],np.diff(mz)],axis = 0)
-    if len(intensityProcessing) > 0:
-        for func in intensityProcessing:
-            if func == 'log':
-                it = np.log(it)
-            elif func == 'sqrt':
-                it = np.sqrt(it)
-            elif func == 'MaxNorm':
-                it = it/np.max(it)
-            elif func == 'TICNorm':
-                it = it/np.sum(it)
-            elif func == 'CAP':
-                it = np.clip(it,0,1)
-
-    if len(mzProcessing) > 0:
-        for func in mzProcessing:
-            if func == 'MaxNorm':
-                mz = (mz - np.min(mz))/(np.max(mz)-np.min(mz))
-            elif func == 'CAP':
-                mz = np.clip(mz,0,1)
-            elif isinstance(func,tuple):
-                if func[0] == 'Threshold':
-                    mz = mz[mz > func[1]]
-                    it = it[mz > func[1]]
-                elif func[0] == 'divide':
-                    if len(func)  == 2:
-                        mz = mz / func[1]
-                    elif len(func) == 3:
-                        mz = (mz - func[1])/(func[2]-func[1])
-
-    #originalLength = len(mz)
-    if returntype == 'dual':
-        mz =  np.pad(mz, (0, Max_length - len(mz)), 'constant')
-        it =  np.pad(it, (0, Max_length - len(it)), 'constant')
-        return mz,it
-    elif returntype == 'numpy':
-        vec = np.zeros(Max_length)
-        mz =  np.pad(mz, (0, int(Max_length/2 - len(mz))), 'constant')
-        it =  np.pad(it, (0, int(Max_length/2 - len(it))), 'constant')
-        vec[::2] = mz
-        vec[1::2] = it
-    elif returntype == 'torch':
-        vec = torch.zeros(Max_length)
-        mz =  torch.tensor(np.pad(mz, (0, int(Max_length/2 - len(mz))), 'constant'),dtype=torch.float32)
-        it =  torch.tensor(np.pad(it, (0, int(Max_length/2 - len(it))), 'constant'),dtype=torch.float32)
-        vec[::2] = mz
-        vec[1::2] = it
-    return vec

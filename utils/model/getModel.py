@@ -20,7 +20,7 @@ def getModel(yaml_file=None):
         with open(yaml_file) as f:
             model_kwargs = yaml.load(f, Loader=yaml.FullLoader)
 
-    SpectraStream = modelStream.VQMSStream(**model_kwargs) # Following the original parameters
+    SpectraStream = modelStream.SpectroVQ(**model_kwargs) # Following the original parameters
     return SpectraStream
 
 def ApplyWeights(model,weights_file):

@@ -32,7 +32,7 @@ class MGFDenoiser():
     '''
     This class is reposible for the direct denoising operation from mgf to mgf files
     '''
-    def __init__(self,model:VQMSStream,inputMGF,outputMGF):
+    def __init__(self,model:SpectroVQ,inputMGF,outputMGF):
         self.inputMGF = inputMGF
         if not os.path.exists(self.inputMGF):
             Warning(f'Input file {self.inputMGF} does not exist')

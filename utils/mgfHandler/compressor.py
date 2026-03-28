@@ -13,7 +13,7 @@ import pickle
 DEFAULTMGFPARAMSKEYS = ['title','rtinseconds','pepmass','charge','scans','seq','modifications']
 class MGFCompressor():
     def __init__(self,model,mgfFilePath,OutputFileName = None,batch_size = None,quantizer = 6, store_compounded = True,
-                 gzip_compression_level = None,zlib_compression_level = 6,outputOutOfRange = True):
+                 gzip_compression_level = None,zlib_compression_level = 6,zstd_compression_level = None,outputOutOfRange = True):
         """
         Initialize the MGFCompressor for compressing mass spectrometry data.
 
@@ -26,7 +26,7 @@ class MGFCompressor():
             store_compounded (bool): Whether to store spectra in a multiple quantizer format. Each spectra is stored as a 2 series of quantizer codes
             gzip_compression_level (int, optional): Compression level for gzip. Defaults to None.
             zlib_compression_level (int): Compression level for zlib. Defaults to 6.
-            outputOutOfRange (bool): Whether to output out of range values. Defaults to True.
+            outputOutOfRange (bool): Whether to include peaks outside the range of 150-1500Th. Defaults to True.
         """
         self.model = model
         self.mgfFilePath = mgfFilePath
@@ -36,7 +36,7 @@ class MGFCompressor():
             Warning(f"Output file name is not defined; using input name {self.OutputFileName} as output name")
         self.mgfFile = mgf.read(mgfFilePath)
         self.device = next(self.model.parameters()).device
-        self.packer = compress.BitPacker(10, open(self.OutputFileName + '.vqms2', 'wb'), gzip_compression=gzip_compression_level, zlib_compression=zlib_compression_level)
+        self.packer = compress.BitPacker(10, open(self.OutputFileName + '.vqms2', 'wb'), gzip_compression=gzip_compression_level, zlib_compression=zlib_compression_level, zstd_compression=zstd_compression_level)
         self.gzip_compression_level = gzip_compression_level
         self.parquet_compression_level = zlib_compression_level if zlib_compression_level is not None else gzip_compression_level
         self.quantizer = quantizer
@@ -89,7 +89,7 @@ class MGFCompressor():
             mzList.append(spectrum['m/z array'])
             intensityList.append(spectrum['intensity array'])
             paramList.append(spectrum['params'])
-            if (debug) & (i >= 3):
+            if (debug) & (i >= 10):
                 break
         self.mzList = mzList
         self.intensityList = intensityList
@@ -131,6 +131,7 @@ class MGFCompressor():
         output_codes = np.transpose(np.array(output_codes.cpu().numpy(),dtype=np.int32),(1,0,2)) # N B D -> B N D
         # Push the first layer of quantized codes first, then push the 2nd layer of chimeric codes to the packer
         print(output_codes[0,:])
+        print(output_codes.shape)
         for j in range(output_codes.shape[0]): # Data Size
             for k in range(self.quantizer):
                 for l in range(self.model.quantizedlen): # Number of integers in each quantizer

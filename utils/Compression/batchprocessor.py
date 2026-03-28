@@ -161,7 +161,7 @@ class SpectrumBatchDecoder():
                 spectrum = rescaleSpectra(spectrum,dim = 2)
                 spectrum = torch.square(spectrum)
                 spectrum = torch.where(spectrum < 1e-3,torch.zeros_like(spectrum),spectrum)
-        return self.postprocessingSpectrum(spectrum.cpu().squeeze().numpy())
+        return self.postprocessingSpectrum(spectrum.cpu().squeeze(1).numpy())
     
     def postprocessingSpectrum(self,spectrum):
         """
@@ -179,6 +179,7 @@ class SpectrumBatchDecoder():
             output_intensity = list(output_intensity.astype(np.float32))
             output_mz = list(np.round(output_mz.astype(np.float32)+ 0.055 ,6))# + 0.05
             if len(self.leftmzList) > 0:
+                print(self.leftmzList)
                 leftmzArr = np.array(self.leftmzList[j])
                 if (leftmzArr[leftmzArr >= 1500].shape[0] > 0) & (any([mz == 1499.95 for mz in output_mz])):
                     #print('removing peaks at 1499.95')

@@ -14,9 +14,7 @@ from . import quantization as qt
 from . import modules as m # 
 #from utils import _check_checksum, _linear_overlap_add, _get_checkpoint_url
 
-# Alternate implmentation of the modelStream class
-
-class VQMSStream(nn.Module):
+class SpectroVQ(nn.Module):
     def __init__(self, inputChannel = 1, dimension = 128, n_filters = 32,n_residual_layers: int = 1,
                  ratios: tp.List[int] = [8, 5, 4, 2], activation: str = 'ELU', activation_params: dict = {'alpha': 1.0},final_activation: tp.Optional[str] = 'Tanh',
                  kernel_size: int = 7, last_kernel_size: int = 7, residual_kernel_size: int = 3, dilation_base: int = 2, causal: bool = True, norm: str = 'weight_norm',

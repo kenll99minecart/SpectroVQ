@@ -7,6 +7,7 @@ import typing as tp
 import gzip
 import zlib
 import io
+from .zstd_compressor import ZstdBitPacker, ZstdBitUnpacker
 
 class ZlibCompressedFile:
     """A file-like object that compresses data using zlib before writing to the underlying file
@@ -137,6 +138,8 @@ class BitPacker:
         fo (IO[bytes]): file-object to push the bytes to.
         gzip_compression (int, optional): Level of gzip compression (1-9), None for no compression.
         zlib_compression (int, optional): Level of zlib compression (1-9), None for no compression.
+        zstd_compression (int, optional): Level of zstd compression (1-22), None for no compression.
+        zstd_dict_path (str, optional): Path to zstd dictionary file for better compression.
     """
     """Simple bit packer to handle ints with a non standard width, e.g. 10 bits.
     Note that for some bandwidth (1.5, 3), the codebook representation
@@ -148,13 +151,20 @@ class BitPacker:
         gzip_compression (int, optional): Level of gzip compression (1-9), None for no compression.
         zlib_compression (int, optional): Level of zlib compression (1-9), None for no compression.
     """
-    def __init__(self, bits: int, fo: tp.IO[bytes], gzip_compression = None, zlib_compression = None):
+    def __init__(self, bits: int, fo: tp.IO[bytes], gzip_compression = None, zlib_compression = None, zstd_compression = None):
         self._current_value = 0
         self._current_bits = 0
         self.bits = bits
         
-        if gzip_compression is not None and zlib_compression is not None:
-            raise ValueError("Cannot use both gzip and zlib compression simultaneously")
+        # Count compression methods specified
+        compression_methods = sum([
+            gzip_compression is not None,
+            zlib_compression is not None, 
+            zstd_compression is not None
+        ])
+        
+        if compression_methods > 1:
+            raise ValueError("Cannot use multiple compression methods simultaneously")
         
         if gzip_compression is not None:
             self.fo = gzip.GzipFile(fileobj=fo, mode='wb', compresslevel=gzip_compression)
@@ -162,6 +172,10 @@ class BitPacker:
         elif zlib_compression is not None:
             self.fo = ZlibCompressedFile(fo, compression_level=zlib_compression, mode='w')
             self.compression_type = 'zlib'
+        elif zstd_compression is not None:
+            # Use ZstdBitPacker for advanced compression
+            self.fo = ZstdBitPacker(bits, fo, zstd_compression)
+            self.compression_type = 'zstd'
         else:
             self.fo = fo
             self.compression_type = None
@@ -169,7 +183,13 @@ class BitPacker:
     def push(self, value: int):
         """Push a new value to the stream. This will immediately
         write as many uint8 as possible to the underlying file-object."""
-        self._current_value += (value << self._current_bits)
+        if self.compression_type == 'zstd':
+            # For zstd, delegate to the ZstdBitPacker
+            # Convert numpy integers to Python integers
+            self.fo.push(int(value))
+            return
+            
+        self._current_value += (int(value) << self._current_bits)
         self._current_bits += self.bits
         while self._current_bits >= 8:
             lower_8bits = self._current_value & 0xff
@@ -181,6 +201,11 @@ class BitPacker:
     def flush(self):
         """Flushes the remaining partial uint8, call this at the end
         of the stream to encode."""
+        if self.compression_type == 'zstd':
+            # For zstd, delegate to the ZstdBitPacker
+            self.fo.flush()
+            return
+            
         if self._current_bits:
             self.fo.write(bytes([self._current_value]))
             self._current_value = 0
@@ -204,6 +229,8 @@ class BitUnpacker:
         fo (IO[bytes]): file-object to push the bytes to.
         gzip_compression (int, optional): Level of gzip compression used, None if no gzip compression.
         zlib_compression (int, optional): Level of zlib compression used, None if no zlib compression.
+        zstd_compression (int, optional): Level of zstd compression used, None if no zstd compression.
+        zstd_dict_path (str, optional): Path to zstd dictionary file for better compression.
     """
     """BitUnpacker does the opposite of `BitPacker`.
 
@@ -213,18 +240,32 @@ class BitUnpacker:
         gzip_compression (int, optional): Level of gzip compression used, None if no gzip compression.
         zlib_compression (int, optional): Level of zlib compression used, None if no zlib compression.
     """
-    def __init__(self, bits: int, fo: tp.IO[bytes], gzip_compression = None, zlib_compression = None):
+    def __init__(self, bits: int, fo: tp.IO[bytes], gzip_compression = None, zlib_compression = None, zstd_compression = None):
         self.bits = bits
         
-        if gzip_compression is not None and zlib_compression is not None:
-            raise ValueError("Cannot use both gzip and zlib compression simultaneously")
+        # Count compression methods specified
+        compression_methods = sum([
+            gzip_compression is not None,
+            zlib_compression is not None,
+            zstd_compression is not None
+        ])
+        
+        if compression_methods > 1:
+            raise ValueError("Cannot use multiple compression methods simultaneously")
             
         if gzip_compression is not None:
             self.fo = gzip.GzipFile(fileobj=fo, mode='rb')
+            self.compression_type = 'gzip'
         elif zlib_compression is not None:
             self.fo = ZlibCompressedFile(fo, mode='r')
+            self.compression_type = 'zlib'
+        elif zstd_compression is not None:
+            # Use ZstdBitUnpacker for advanced compression
+            self.fo = ZstdBitUnpacker(bits, fo, zstd_compression)
+            self.compression_type = 'zstd'
         else:
             self.fo = fo
+            self.compression_type = None
             
         self._mask = (1 << bits) - 1
         self._current_value = 0
@@ -236,6 +277,10 @@ class BitUnpacker:
         extra bytes from the underlying file-object.
         Returns `None` when reaching the end of the stream.
         """
+        if self.compression_type == 'zstd':
+            # For zstd, delegate to the ZstdBitUnpacker
+            return self.fo.pull()
+            
         while self._current_bits < self.bits:
             buf = self.fo.read(1)
             if not buf:
@@ -258,8 +303,8 @@ def create_compressed_bit_packer(bits: int, fo: tp.IO[bytes],
     Args:
         bits (int): Number of bits per value that will be pushed.
         fo (IO[bytes]): File-object to push the bytes to.
-        compression_type (str): Type of compression to use ('zlib', 'gzip', or None).
-        compression_level (int): Compression level (1-9), where 9 is highest compression.
+        compression_type (str): Type of compression to use ('zlib', 'gzip', 'zstd', or None).
+        compression_level (int): Compression level (1-9 for zlib/gzip, 1-22 for zstd), where higher is better compression.
         
     Returns:
         BitPacker: A configured BitPacker instance with the specified compression.
@@ -273,7 +318,10 @@ def create_compressed_bit_packer(bits: int, fo: tp.IO[bytes],
     if compression_type.lower() == 'gzip':
         return BitPacker(bits, fo, gzip_compression=compression_level)
     
-    raise ValueError(f"Unsupported compression type: {compression_type}. Use 'zlib', 'gzip', or None.")
+    if compression_type.lower() == 'zstd':
+        return BitPacker(bits, fo, zstd_compression=compression_level)
+    
+    raise ValueError(f"Unsupported compression type: {compression_type}. Use 'zlib', 'gzip', 'zstd', or None.")
 
 
 def create_compressed_bit_unpacker(bits: int, fo: tp.IO[bytes],
@@ -283,7 +331,7 @@ def create_compressed_bit_unpacker(bits: int, fo: tp.IO[bytes],
     Args:
         bits (int): Number of bits of the values to decode.
         fo (IO[bytes]): File-object to read compressed data from.
-        compression_type (str): Type of compression used ('zlib', 'gzip', or None).
+        compression_type (str): Type of compression used ('zlib', 'gzip', 'zstd', or None).
         
     Returns:
         BitUnpacker: A configured BitUnpacker instance with the specified compression.
@@ -297,7 +345,10 @@ def create_compressed_bit_unpacker(bits: int, fo: tp.IO[bytes],
     if compression_type.lower() == 'gzip':
         return BitUnpacker(bits, fo, gzip_compression=1)
     
-    raise ValueError(f"Unsupported compression type: {compression_type}. Use 'zlib', 'gzip', or None.")
+    if compression_type.lower() == 'zstd':
+        return BitUnpacker(bits, fo, zstd_compression=1)
+    
+    raise ValueError(f"Unsupported compression type: {compression_type}. Use 'zlib', 'gzip', 'zstd', or None.")
 
 
 def zlib_compress(data: bytes, level: int = 6) -> bytes:
