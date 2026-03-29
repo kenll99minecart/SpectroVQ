@@ -68,13 +68,13 @@ def main():
     parser.add_argument('--no_retain_original_peaks', dest='retain_original_peaks', action='store_false',
                         help='Do not retain original peaks outside the m/z range')
     parser.add_argument('--one_percent_threshold', action='store_true', default=True,
-                        help='Apply 1% intensity threshold')
+                        help='Apply 1%% intensity threshold')
     parser.add_argument('--no_one_percent_threshold', dest='one_percent_threshold', action='store_false',
-                        help='Do not apply 1% intensity threshold')
+                        help='Do not apply 1%% intensity threshold')
     parser.add_argument('--compounded_spectra', action='store_true', default=True,
-                        help='Enable chimeric spectrum reconstruction')
+                        help='Enable raw spectrum reconstruction')
     parser.add_argument('--no_compounded_spectra', dest='compounded_spectra', action='store_false',
-                        help='Disable chimeric spectrum reconstruction')
+                        help='Disable raw spectrum reconstruction')
     
     args = parser.parse_args()
     

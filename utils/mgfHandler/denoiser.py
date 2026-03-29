@@ -5,7 +5,7 @@ from ..SpectrumProcessing import SpectraLoading
 import torch
 from pyteomics import mgf
 import numpy as np
-from ..model.modelStream import VQMSStream
+from ..model.modelStream import SpectroVQ
 import pandas as pd
 eps = 1e-6
 
@@ -24,8 +24,8 @@ class SpectrumBatch(Dataset):
 
     def __getitem__(self, idx):
         MSspectra,MaxVal = SpectraLoading.massSpectrumToVector(self.Xmz.iloc[idx],self.Xintensity.iloc[idx], bin_size = 0.1,SPECTRA_DIMENSION=13500,rawIT = False,Mode = None,mean0 = False,CenterIntegerBins=False,AlterMZ=False
-                                        ,GenerateMZList=False,MZDiff = False,mzRange = [150,1500])# 'sqrt'
-        precursorpeakidx = np.floor((self.precursorMZ.iloc[idx] - 150) / 0.1).astype('int32')#'sqrt'
+                                        ,GenerateMZList=False,MZDiff = False,mzRange = [150,1500])
+        precursorpeakidx = np.floor((self.precursorMZ.iloc[idx] - 150) / 0.1).astype('int32')
         return torch.sqrt(torch.unsqueeze(MSspectra,dim = 0)),MaxVal,precursorpeakidx
 
 class MGFDenoiser():
@@ -52,7 +52,7 @@ class MGFDenoiser():
             df_train['length'] = df_train['m/z array'].apply(len)
             df_train['title'] = df_train['params'].apply(lambda x: x['title'] if 'title' in x else 'Unknown')
             print('Processing:',file)
-            df_train['PrecursorMZ'] = df_train['params'].apply(lambda x: x['pepmass'][0])#/ int(x['charge'][0]))
+            df_train['PrecursorMZ'] = df_train['params'].apply(lambda x: x['pepmass'][0])
             df_train['charge'] = df_train['params'].apply(lambda x: int(x['charge'][0]))
             
             spectraTrainData = SpectrumBatch(df_train)
@@ -155,14 +155,10 @@ class MGFDenoiser():
                     df_chunks = []
                     
                     for chunk_start in range(0, len(savedChimericSpectra), chunk_size):
-                        # print(f'processing chunk {chunk_start // chunk_size + 1}')
                         chunk_end = min(chunk_start + chunk_size, len(savedChimericSpectra))
                         RowList = []
                         
                         for i in range(chunk_start, chunk_end):
-                            # if i % 100 == 0:
-                            #     print(f"batch {i // 100 + 1}")
-                            # print(maxValList[i])
                             output_mz,output_intensity = SpectraLoading.VectorToMassSpectrum(savedChimericSpectra[i],maxValList[i],bin_size = 0.1,threshold = 1e-4,min_mz = 150,AlterMZ=False,returnNumpy=True)
                             output_intensity = list(output_intensity)
                             output_mz = list(np.round(output_mz+ 0.055 ,6))
@@ -179,12 +175,10 @@ class MGFDenoiser():
                                 output_intensity = output_intensity[thresholdix]
                             
                             Newrow = df_train.iloc[savedChimericIdx[i]].copy()
-                            # print(id(Newrow['params']),id(df_train.iloc[savedChimericIdx[i]]))
                             Newrow['m/zNew'] = output_mz
                             Newrow['intensityNew'] = output_intensity
                             NewDict = Newrow['params'].copy()
-                            NewDict['title'] = Newrow['params']['title'] + '_Chimeric_' + str(i)
-                            #Manually shift 0.01s rt to record compoundedSpectra time (hopefully don't affect much)  #658.98822
+                            NewDict['title'] = Newrow['params']['title'] + '_raw_' + str(i)
                             NewDict['rtinseconds'] += 0.03
                             Newrow['params'] = NewDict
                             if len(output_mz) < 2:
@@ -204,12 +198,10 @@ class MGFDenoiser():
                         del df_chunks, df_chimeric
               
                 print('Done Conversion!')
-                print(df_train[df_train['title'] == 'LFQ_Orbitrap_DDA_Human_03.35099.35099.2'])
-                mzColumnName = 'm/zNew'#df_train.columns[df_train.columns.str.contains('m/z')][0]
-                intensityColumnName = 'intensityNew'#df_train.columns[df_train.columns.str.contains('intensity')][0]
+                mzColumnName = 'm/zNew'
+                intensityColumnName = 'intensityNew'
 
                 from pyteomics import mgf
-                #def writemzML(df,mzColumnName,intensityColumnName):
                 def changeTofloat(arr):
                     return np.round(np.array(arr,np.float64),4)
                 

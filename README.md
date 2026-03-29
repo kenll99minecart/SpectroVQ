@@ -20,21 +20,7 @@ conda activate spectrovq
 
 ### Step 2: Install PyTorch
 **IMPORTANT**: Install PyTorch based on your CUDA version first. Check your CUDA version with `nvidia-smi`.
-
-For CUDA 11.8:
-```bash
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
-```
-
-For CUDA 12.1:
-```bash
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-```
-
-For CPU-only:
-```bash
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-```
+Check the pytorch official website for more.
 
 ### Step 3: Install Dependencies
 ```bash
@@ -102,7 +88,7 @@ python main_cmd_line.py --decompress --input input.vqms2 --output output.mgf --w
 - `--compression_level, -cL`: Compression level [required]
 - `--batch_size, -b`: Batch size for processing [optional]
 - `--quantizer, -q`: Quantizer level for compression [default: 4]
-- `--store_compounded, -sC`: Store compounded spectra [flag]
+- `--stored_raw, -sR`: Store raw reconstructed spectra [flag]
 
 ## File Formats
 - **Input**: MGF files for denoising and compression

@@ -29,7 +29,7 @@ SpectraStream.eval()
 # %%
 import time
 # Initialize MGF compressor with specific parameters for spectrum compression
-mgfcompressor = MGFCompressor(mgfFilePath='/data/data/PXD028735/LFQ_Orbitrap_DDA_Ecoli_02.mgf',OutputFileName='/data3/james/LFQ_Orbitrap_DDA_Ecoli_02',model=SpectraStream,batch_size=1,quantizer=4,store_compounded = True
+mgfcompressor = MGFCompressor(mgfFilePath='/data/data/PXD028735/LFQ_Orbitrap_DDA_Ecoli_02.mgf',OutputFileName='/data3/james/LFQ_Orbitrap_DDA_Ecoli_02',model=SpectraStream,batch_size=1,quantizer=4
 ,gzip_compression_level = None, zlib_compression_level = None, zstd_compression_level = None)
 # Perform compression with verbose output and debug mode enabled
 start = time.time()
@@ -43,33 +43,41 @@ import importlib
 importlib.reload(decompressor)
 
 # Initialize MGF decompressor to reconstruct spectra from compressed format
-mgfdecompressor = decompressor.MGFDecompressor(model=SpectraStream,inputFileName='/data3/james/LFQ_Orbitrap_DDA_Ecoli_02.vqms2',outputfilemgf='/data3/james/LFQ_Orbitrap_DDA_Ecoli_02_decompressed.mgf',batch_size=2,quantizer=4,store_compounded = False
+mgfdecompressor = decompressor.MGFDecompressor(model=SpectraStream,inputFileName='/data3/james/LFQ_Orbitrap_DDA_Ecoli_02.vqms2',outputfilemgf='/data3/james/LFQ_Orbitrap_DDA_Ecoli_02_decompressed.mgf',batch_size=2,quantizer=4,stored_raw = True
 ,gzip_compression_level = None, zlib_compression_level = None,zstd_compression_level = None)
 
 # Perform decompression to reconstruct original MGF file
-mgfdecompressor.DecompressAll()
+mgfdecompressor.DecompressAll(verbose = 2)
 # %%
-from pyteomics import mgf
-from matplotlib import pyplot as plt
-numSpectra = 0
-for idx, spectra in enumerate(mgf.read('/data3/james/LFQ_Orbitrap_DDA_Ecoli_02_decompressed.mgf')):
-    if idx == 3:
-        # print(spectra)
-        plt.stem(spectra['m/z array'],spectra['intensity array'])
-        print(spectra['m/z array'])
-        print(spectra['intensity array'])
-        numSpectra +=1
-        break
-plt.show()
-print(numSpectra)
-# %%
-for idx, spectra in  enumerate(mgf.read('/data/data/PXD028735/LFQ_Orbitrap_DDA_Ecoli_02.mgf')):
-    if idx == 3:
-        plt.stem(spectra['m/z array'],spectra['intensity array'])
-        print(spectra['m/z array'])
-        print(spectra['intensity array'])
-        plt.show()
-        break
+# from pyteomics import mgf
+# from matplotlib import pyplot as plt
+# for idx, spectra in enumerate(mgf.read('/data3/james/LFQ_Orbitrap_DDA_Ecoli_02_decompressed.mgf')):
+#     if idx == 10:
+#         # print(spectra)
+#         plt.stem(spectra['m/z array'],spectra['intensity array'])
+#         plt.show()
+#         print(spectra['m/z array'])
+#         print(spectra['intensity array'])
+#         break
+#     # print(spectra['params']['title'])
+# # plt.show()
+# # %%
+# for idx, spectra in enumerate(mgf.read('/data3/james/LFQ_Orbitrap_DDA_Ecoli_02_decompressed.mgf')):
+#     if idx == 0:
+#         plt.stem(spectra['m/z array'],spectra['intensity array'])
+#         print(spectra['m/z array'])
+#         print(spectra['intensity array'])
+#         print(spectra['params']['title'])
+#         break
+# plt.show()
+# # %%
+# for idx, spectra in enumerate(mgf.read('/data/data/PXD028735/LFQ_Orbitrap_DDA_Ecoli_02.mgf')):
+#     if idx == 0:
+#         plt.stem(spectra['m/z array'],spectra['intensity array'])
+#         plt.show()
+#         print(spectra['m/z array'])
+#         print(spectra['intensity array'])
+#         break
 # %%
 # import pandas as pd
 # a = pd.read_parquet('/data3/james/LFQ_Orbitrap_DDA_Ecoli_02.parquet')
@@ -81,15 +89,8 @@ for file in os.listdir(filepath):
     if ('Orbitrap' in file) & (file.endswith('mgf')):
         fullpath = os.path.join(filepath,file)
         print(f'Compressing {file}')
-        mgfcompressor = MGFCompressor(mgfFilePath=fullpath,OutputFileName=f'/data3/james/resultFiles/gzip_{file}',model=SpectraStream,batch_size=256,quantizer=4,store_compounded = True,
-        gzip_compression_level = 4, zlib_compression_level = None)
-        # Perform compression with verbose output and debug mode enabled
-        start = time.time()
-        mgfcompressor.CompressAll(verbose = 0,debug = False)
-        end = time.time()
-        print(f"Compression time: {end - start} seconds")
-        mgfcompressor = MGFCompressor(mgfFilePath=fullpath,OutputFileName=f'/data3/james/resultFiles/{file}',model=SpectraStream,batch_size=256,quantizer=4,store_compounded = True,
-        )
+        mgfcompressor = MGFCompressor(mgfFilePath=fullpath,OutputFileName=f'/data3/james/resultFiles/zstd_{file}',model=SpectraStream,batch_size=256,quantizer=4
+        ,gzip_compression_level = None, zlib_compression_level = None, zstd_compression_level = None)
         # Perform compression with verbose output and debug mode enabled
         start = time.time()
         mgfcompressor.CompressAll(verbose = 0,debug = False)
@@ -97,13 +98,13 @@ for file in os.listdir(filepath):
         print(f"Compression time: {end - start} seconds")
 # %%
 # Import and reload the decompressor module for spectrum decompression
-from utils.mgfHandler import decompressor
-import importlib
-importlib.reload(decompressor)
+# from utils.mgfHandler import decompressor
+# import importlib
+# importlib.reload(decompressor)
 
-# Initialize MGF decompressor to reconstruct spectra from compressed format
-mgfdecompressor = decompressor.MGFDecompressor(model=SpectraStream,inputFileName='/data3/james/resultFiles/gzip_LFQ_Orbitrap_DDA_Ecoli_01.mgf.vqms2',outputfilemgf='/data3/james/LFQ_Orbitrap_DDA_Ecoli_01_decompressed.mgf',batch_size=256,quantizer=4,store_compounded = True,
-gzip_compression_level = 4, zlib_compression_level = None)
-# Perform decompression to reconstruct original MGF file
-mgfdecompressor.DecompressAll(verbose = 0)
+# # Initialize MGF decompressor to reconstruct spectra from compressed format
+# mgfdecompressor = decompressor.MGFDecompressor(model=SpectraStream,inputFileName='/data3/james/resultFiles/gzip_LFQ_Orbitrap_DDA_Ecoli_01.mgf.vqms2',outputfilemgf='/data3/james/LFQ_Orbitrap_DDA_Ecoli_01_decompressed.mgf',batch_size=256,quantizer=4,store_compounded = True,
+# gzip_compression_level = 4, zlib_compression_level = None)
+# # Perform decompression to reconstruct original MGF file
+# mgfdecompressor.DecompressAll(verbose = 0)
 # %%
