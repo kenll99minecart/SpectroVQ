@@ -3,7 +3,7 @@ from tqdm import tqdm
 import os
 from ..SpectrumProcessing import SpectraLoading
 import torch
-from pyteomics import mgf
+
 import numpy as np
 from ..model.modelStream import SpectroVQ
 import pandas as pd
@@ -28,6 +28,7 @@ class SpectrumBatch(Dataset):
         precursorpeakidx = np.floor((self.precursorMZ.iloc[idx] - 150) / 0.1).astype('int32')
         return torch.sqrt(torch.unsqueeze(MSspectra,dim = 0)),MaxVal,precursorpeakidx
 
+
 class MGFDenoiser():
     '''
     This class is reposible for the direct denoising operation from mgf to mgf files
@@ -41,26 +42,27 @@ class MGFDenoiser():
         self.device = next(self.model.parameters()).device
         
     def denoiseMGF(self,numQuantSingle = 3,retainOriginalPeaks = True,OnePercentThreshold = True,compoundedSpectra = True):
+        file = self.inputMGF
+        from pyteomics import mgf
+        reader = mgf.read(file)
+        filename = os.path.splitext(os.path.basename(file))[0]
+        ListofDicts = []
+        for u in reader:
+            ListofDicts.append(u)
+        df_train = pd.DataFrame.from_dict(ListofDicts)
+        
+        df_train['length'] = df_train['m/z array'].apply(len)
+        df_train['title'] = df_train['params'].apply(lambda x: x['title'] if 'title' in x else 'Unknown')
+        print('Processing:',file)
+        df_train['PrecursorMZ'] = df_train['params'].apply(lambda x: x['pepmass'][0])
+        df_train['charge'] = df_train['params'].apply(lambda x: int(x['charge'][0]))
+        
+        spectraTrainData = SpectrumBatch(df_train)
+        from torch.utils.data import DataLoader
+        # Create a batch loader for the training data
+        batch_size = 32
+        train_loader = DataLoader(spectraTrainData, batch_size=batch_size, shuffle=False,num_workers=48,drop_last=False,pin_memory=True, prefetch_factor = 10)
         with torch.no_grad():
-            file = self.inputMGF
-            reader = mgf.read(file)
-            filename = os.path.splitext(os.path.basename(file))[0]
-            ListofDicts = []
-            for u in reader:
-                ListofDicts.append(u)
-            df_train = pd.DataFrame.from_dict(ListofDicts)
-            df_train['length'] = df_train['m/z array'].apply(len)
-            df_train['title'] = df_train['params'].apply(lambda x: x['title'] if 'title' in x else 'Unknown')
-            print('Processing:',file)
-            df_train['PrecursorMZ'] = df_train['params'].apply(lambda x: x['pepmass'][0])
-            df_train['charge'] = df_train['params'].apply(lambda x: int(x['charge'][0]))
-            
-            spectraTrainData = SpectrumBatch(df_train)
-            from torch.utils.data import DataLoader
-            # Create a batch loader for the training data
-            batch_size = 32
-            train_loader = DataLoader(spectraTrainData, batch_size=batch_size, shuffle=False,num_workers=48,drop_last=False,pin_memory=True, prefetch_factor = 10)
-            
             from tqdm import tqdm
             from matplotlib import pyplot as plt
             import importlib
