@@ -14,7 +14,7 @@ Neural Proteomics Mass Spectrum Compression
 
 ### Step 1: Create Conda Environment
 ```bash
-conda create -n spectrovq python=3.8
+conda create -n spectrovq python=3.11
 conda activate spectrovq
 ```
 
