@@ -39,7 +39,7 @@ class MGFDenoiser():
         self.model = model
         self.device = next(self.model.parameters()).device
         
-    def denoiseMGF(self,numQuantSingle = 3,retainOriginalPeaks = True,OnePercentThreshold = True,compoundedSpectra = True):
+    def denoiseMGF(self,numQuantSingle = 3,retainOriginalPeaks = True,OnePercentThreshold = True,compoundedSpectra = True, num_workers = 0):
         file = self.inputMGF
         from pyteomics import mgf
         reader = mgf.read(file)
@@ -57,7 +57,7 @@ class MGFDenoiser():
         from torch.utils.data import DataLoader
         # Create a batch loader for the training data
         batch_size = 32
-        train_loader = DataLoader(spectraTrainData, batch_size=batch_size, shuffle=False,num_workers=48,drop_last=False,pin_memory=True, prefetch_factor = 10)
+        train_loader = DataLoader(spectraTrainData, batch_size=batch_size, shuffle=False,num_workers=num_workers,drop_last=False,prefetch_factor = 5)
         with torch.no_grad():
             from tqdm import tqdm
             from matplotlib import pyplot as plt

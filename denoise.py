@@ -76,6 +76,8 @@ def main():
                         help='Enable raw spectrum reconstruction')
     parser.add_argument('--no_compounded_spectra', dest='compounded_spectra', action='store_false',
                         help='Disable raw spectrum reconstruction')
+    parser.add_argument('--num_workers', type=int, default=0,
+                        help='Number of workers for data loading')
     
     args = parser.parse_args()
     
@@ -115,7 +117,8 @@ def main():
             numQuantSingle=args.num_quantizers,
             retainOriginalPeaks=args.retain_original_peaks,
             OnePercentThreshold=args.one_percent_threshold,
-            compoundedSpectra=args.compounded_spectra
+            compoundedSpectra=args.compounded_spectra,
+            num_workers=args.num_workers
         )
         
         print("Denoising completed successfully!")
