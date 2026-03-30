@@ -121,7 +121,7 @@ def main():
         print("Denoising completed successfully!")
         
     except Exception as e:
-        traceback.print_exec()
+        traceback.print_exc()
         print(f"Error during denoising: {str(e)}")
         sys.exit(1)
 
