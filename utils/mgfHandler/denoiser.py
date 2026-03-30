@@ -13,7 +13,6 @@ class SpectrumBatch(Dataset):
     def __init__(self, df):
         self.Xmz = df['m/z array']#
         self.Xintensity = df['intensity array']# array
-        self.precursorMZ = df['PrecursorMZ'] if 'PrecursorMZ' in df.columns else None
         self.length = df.shape[0]
 
     def __len__(self):
@@ -25,8 +24,7 @@ class SpectrumBatch(Dataset):
     def __getitem__(self, idx):
         MSspectra,MaxVal = SpectraLoading.massSpectrumToVector(self.Xmz.iloc[idx],self.Xintensity.iloc[idx], bin_size = 0.1,SPECTRA_DIMENSION=13500,rawIT = False,Mode = None,mean0 = False,CenterIntegerBins=False,AlterMZ=False
                                         ,GenerateMZList=False,MZDiff = False,mzRange = [150,1500])
-        precursorpeakidx = np.floor((self.precursorMZ.iloc[idx] - 150) / 0.1).astype('int32')
-        return torch.sqrt(torch.unsqueeze(MSspectra,dim = 0)),MaxVal,precursorpeakidx
+        return torch.sqrt(torch.unsqueeze(MSspectra,dim = 0)),MaxVal
 
 
 class MGFDenoiser():
@@ -54,8 +52,6 @@ class MGFDenoiser():
         df_train['length'] = df_train['m/z array'].apply(len)
         df_train['title'] = df_train['params'].apply(lambda x: x['title'] if 'title' in x else 'Unknown')
         print('Processing:',file)
-        df_train['PrecursorMZ'] = df_train['params'].apply(lambda x: x['pepmass'][0])
-        df_train['charge'] = df_train['params'].apply(lambda x: int(x['charge'][0]))
         
         spectraTrainData = SpectrumBatch(df_train)
         from torch.utils.data import DataLoader
@@ -80,7 +76,7 @@ class MGFDenoiser():
             savedChimericIdx = []
             maxValList = []
             with torch.no_grad():
-                for i, (train_data,MaxVal,precursorPeakIdx) in tqdm(enumerate(train_loader)):
+                for i, (train_data,MaxVal) in tqdm(enumerate(train_loader)):
                     input_spectra = train_data
                     input_spectra = input_spectra.to(self.device)
 
