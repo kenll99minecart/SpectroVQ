@@ -31,7 +31,8 @@ def ApplyWeights(model,weights_file):
     model (torch.nn.Module): The model to which the weights will be applied
     weights_file (str): The path to the weights file; if None, the weights will not be loaded
     '''
-    weights = torch.load(weights_file)
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    weights = torch.load(weights_file, map_location = device)
     weights_dict = {}
     for k, v in weights['state_dict'].items():
         new_k = k.replace('module.', '') if 'module' in k else k
