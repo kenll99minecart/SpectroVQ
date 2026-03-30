@@ -10,6 +10,7 @@ import os
 import sys
 import torch
 from pathlib import Path
+import traceback
 
 # Add utils to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'utils'))
@@ -120,6 +121,7 @@ def main():
         print("Denoising completed successfully!")
         
     except Exception as e:
+        traceback.print_exec()
         print(f"Error during denoising: {str(e)}")
         sys.exit(1)
 
