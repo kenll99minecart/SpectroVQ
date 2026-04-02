@@ -1,110 +1,88 @@
 # %%
+from utils.mgfHandler.compressor import MGFCompressor
+from utils.mgfHandler.decompressor import MGFDecompressor
+from utils.model import getModel
+import os
+import torch
 import argparse
 import os
 
 # Set up command line argument parser for compression/decompression modes
-# argparser = argparse.ArgumentParser(description='Compress or Decompress MGF files')
-# argparser.add_argument('mode', type=str, help='Mode: compress or decompress')
-# argparser.add_argument('input', type=str, help='Input file name')
-# argparser.add_argument('output', type=str, help='Output file name')
-
+argparser = argparse.ArgumentParser(description='Compress or Decompress MGF files')
+argparser.add_argument('--compress','-m', action = 'store_true', help='Mode: Compress')
+argparser.add_argument('--decompress','-d', action = 'store_true', help='Mode: Decompress')
+argparser.add_argument('--input','-i', type=str, help='Input MGF filePath')
+argparser.add_argument('--output','-o', type=str, help='Output file name')
+argparser.add_argument('--weights','-w', type=str, help='Path to model weights')
+argparser.add_argument('--compression_method','-cM',type = str, help = 'Compression/Decompress Method. Available Compression Method: [gzip,zlib,zstd]')
+argparser.add_argument('--compression_level','-cL',type = str, help = 'Compression Level')
+argparser.add_argument('--batch_size','-b',type = int, help = 'Batch size for compression')
+argparser.add_argument('--quantizer','-q',type = int, help = 'Quantizer level for compression')
+argparser.add_argument('--stored_raw','-sR', action = 'store_true', help = 'Store raw reconstructed spectra')
 # %%
-from utils.mgfHandler.compressor import MGFCompressor
-# Import the decompressor module (currently commented out)
-#from .decompressor import MGFDecompressor
-from utils.model import getModel
-import os
-import torch
+arguments = argparser.parse_args()
+compress = arguments.compress
+decompress = arguments.decompress
+input_file_path = arguments.input
+output_file_path = arguments.output
+weights_path = arguments.weights
+compression_method = arguments.compression
+compression_level = arguments.compression_level
+batch_size = arguments.batch_size
+stored_raw = arguments.stored_raw
 
-# Set CUDA device for GPU acceleration
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+# Double check the input
+if input_file_path is None:
+    raise ValueError("Input file path is required")
+if output_file_path is None:
+    raise ValueError("Output file path is required")
+if weights_path is None:
+    raise ValueError("Weights path is required")
+if compression_method is None:
+    raise ValueError("Compression method is required")
+if compression_level is None:
+    raise ValueError("Compression level is required")
+
+
+# Load 
 torch.backends.cudnn.benchmark=True 
 # Load the neural network model for spectrum processing
 SpectraStream = getModel.getModel()
 # Apply pre-trained weights to the model
-SpectraStream = getModel.ApplyWeights(SpectraStream,'/home/james/ResidualVector/SpectraStreamNewOptimizedMini6ReproducedWithSchedulerWithSortPrecursorMZSQRTNative/LightningChk/SpectraStream-epoch=32-val_loss=0.59.ckpt')
+SpectraStream = getModel.ApplyWeights(SpectraStream,weights_path)
 # Move model to GPU and set to evaluation mode
 SpectraStream.to('cuda')
 SpectraStream.eval()
-# %%
-import time
-# Initialize MGF compressor with specific parameters for spectrum compression
-mgfcompressor = MGFCompressor(mgfFilePath='/data/data/PXD028735/LFQ_Orbitrap_DDA_Ecoli_02.mgf',OutputFileName='/data3/james/LFQ_Orbitrap_DDA_Ecoli_02',model=SpectraStream,batch_size=1,quantizer=4
-,gzip_compression_level = None, zlib_compression_level = None, zstd_compression_level = None)
-# Perform compression with verbose output and debug mode enabled
-start = time.time()
-mgfcompressor.CompressAll(verbose = 1,debug = True)
-end = time.time()
-print(f"Compression time: {end - start} seconds")
-# %%
-# Import and reload the decompressor module for spectrum decompression
-from utils.mgfHandler import decompressor
-import importlib
-importlib.reload(decompressor)
 
-# Initialize MGF decompressor to reconstruct spectra from compressed format
-mgfdecompressor = decompressor.MGFDecompressor(model=SpectraStream,inputFileName='/data3/james/LFQ_Orbitrap_DDA_Ecoli_02.vqms2',outputfilemgf='/data3/james/LFQ_Orbitrap_DDA_Ecoli_02_decompressed.mgf',batch_size=2,quantizer=4,stored_raw = True
-,gzip_compression_level = None, zlib_compression_level = None,zstd_compression_level = None)
-
-# Perform decompression to reconstruct original MGF file
-mgfdecompressor.DecompressAll(verbose = 2)
-# %%
-# from pyteomics import mgf
-# from matplotlib import pyplot as plt
-# for idx, spectra in enumerate(mgf.read('/data3/james/LFQ_Orbitrap_DDA_Ecoli_02_decompressed.mgf')):
-#     if idx == 10:
-#         # print(spectra)
-#         plt.stem(spectra['m/z array'],spectra['intensity array'])
-#         plt.show()
-#         print(spectra['m/z array'])
-#         print(spectra['intensity array'])
-#         break
-#     # print(spectra['params']['title'])
-# # plt.show()
-# # %%
-# for idx, spectra in enumerate(mgf.read('/data3/james/LFQ_Orbitrap_DDA_Ecoli_02_decompressed.mgf')):
-#     if idx == 0:
-#         plt.stem(spectra['m/z array'],spectra['intensity array'])
-#         print(spectra['m/z array'])
-#         print(spectra['intensity array'])
-#         print(spectra['params']['title'])
-#         break
-# plt.show()
-# # %%
-# for idx, spectra in enumerate(mgf.read('/data/data/PXD028735/LFQ_Orbitrap_DDA_Ecoli_02.mgf')):
-#     if idx == 0:
-#         plt.stem(spectra['m/z array'],spectra['intensity array'])
-#         plt.show()
-#         print(spectra['m/z array'])
-#         print(spectra['intensity array'])
-#         break
-# %%
-# import pandas as pd
-# a = pd.read_parquet('/data3/james/LFQ_Orbitrap_DDA_Ecoli_02.parquet')
-# %%
-import os 
-import time
-filepath = '/data/data/PXD028735/'
-for file in os.listdir(filepath):
-    if ('Orbitrap' in file) & (file.endswith('mgf')):
-        fullpath = os.path.join(filepath,file)
-        print(f'Compressing {file}')
-        mgfcompressor = MGFCompressor(mgfFilePath=fullpath,OutputFileName=f'/data3/james/resultFiles/zstd_{file}',model=SpectraStream,batch_size=256,quantizer=4
-        ,gzip_compression_level = None, zlib_compression_level = None, zstd_compression_level = None)
-        # Perform compression with verbose output and debug mode enabled
-        start = time.time()
-        mgfcompressor.CompressAll(verbose = 0,debug = False)
-        end = time.time()
-        print(f"Compression time: {end - start} seconds")
-# %%
-# Import and reload the decompressor module for spectrum decompression
-# from utils.mgfHandler import decompressor
-# import importlib
-# importlib.reload(decompressor)
-
-# # Initialize MGF decompressor to reconstruct spectra from compressed format
-# mgfdecompressor = decompressor.MGFDecompressor(model=SpectraStream,inputFileName='/data3/james/resultFiles/gzip_LFQ_Orbitrap_DDA_Ecoli_01.mgf.vqms2',outputfilemgf='/data3/james/LFQ_Orbitrap_DDA_Ecoli_01_decompressed.mgf',batch_size=256,quantizer=4,store_compounded = True,
-# gzip_compression_level = 4, zlib_compression_level = None)
-# # Perform decompression to reconstruct original MGF file
-# mgfdecompressor.DecompressAll(verbose = 0)
+level = int(compression_level)
+if compress + decompress > 1:
+    raise ValueError("Mode must be either compress or decompress, not both")
+elif compress:
+    if not input_file_path.endswith(".mgf"):
+        raise ValueError("Input file must be a MGF file")
+    if compression_method == "gzip":
+        mgfcompressor = MGFCompressor(mgfFilePath=input_file_path,OutputFileName=output_file_path,model=SpectraStream,batch_size=batch_size,quantizer=4
+    ,gzip_compression_level = level, zlib_compression_level = None, zstd_compression_level = None)
+    elif compression_method == "zlib":
+        mgfcompressor = MGFCompressor(mgfFilePath=input_file_path,OutputFileName=output_file_path,model=SpectraStream,batch_size=batch_size,quantizer=4
+    ,gzip_compression_level = None, zlib_compression_level = level, zstd_compression_level = None)
+    elif compression_method == "zstd":
+        mgfcompressor = MGFCompressor(mgfFilePath=input_file_path,OutputFileName=output_file_path,model=SpectraStream,batch_size=batch_size,quantizer=4
+    ,gzip_compression_level = None, zlib_compression_level = None, zstd_compression_level = level)
+    else:
+        raise ValueError("Compression method must be either 'gzip', 'zlib', or 'zstd'")
+elif decompress:
+    if not input_file_path.endswith(".vqms2"):
+        raise ValueError("Input file must be a .vqms2")
+    if compression_method == "gzip":
+        mgfcompressor = MGFDecompressor(mgfFilePath=input_file_path,OutputFileName=output_file_path,model=SpectraStream,batch_size=batch_size,quantizer=4,stored_raw = stored_raw
+    ,gzip_compression_level = level, zlib_compression_level = None, zstd_compression_level = None)
+    elif compression_method == "zlib":
+        mgfcompressor = MGFDecompressor(mgfFilePath=input_file_path,OutputFileName=output_file_path,model=SpectraStream,batch_size=batch_size,quantizer=4,stored_raw = stored_raw
+    ,gzip_compression_level = None, zlib_compression_level = level, zstd_compression_level = None)
+    elif compression_method == "zstd":
+        mgfcompressor = MGFDecompressor(mgfFilePath=input_file_path,OutputFileName=output_file_path,model=SpectraStream,batch_size=batch_size,quantizer=4,stored_raw = stored_raw
+    ,gzip_compression_level = None, zlib_compression_level = None, zstd_compression_level = level)
+    else:
+        raise ValueError("Compression method must be either 'gzip', 'zlib', or 'zstd'")
 # %%

@@ -57,7 +57,7 @@ class MGFDenoiser():
         from torch.utils.data import DataLoader
         # Create a batch loader for the training data
         batch_size = 32
-        train_loader = DataLoader(spectraTrainData, batch_size=batch_size, shuffle=False,num_workers=num_workers,drop_last=False,prefetch_factor = 5)
+        train_loader = DataLoader(spectraTrainData, batch_size=batch_size, shuffle=False,num_workers=num_workers,drop_last=False,prefetch_factor = 5 if num_workers > 0 else None)
         with torch.no_grad():
             from tqdm import tqdm
             from matplotlib import pyplot as plt

@@ -48,7 +48,7 @@ python train.py --data_path library.feather --output_dir ./models --batch_size 3
 Denoise MGF spectra using a trained SpectroVQ model.
 
 ```bash
-python denoise.py --input_mgf input.mgf --model_path model.ckpt --output_mgf denoised.mgf --num_quantizers 3
+python denoise.py --input_mgf input.mgf --model_path model.ckpt --output_mgf denoised.mgf --num_quantizers 3 --num_workers 0
 ```
 
 **Arguments:**
@@ -64,18 +64,19 @@ python denoise.py --input_mgf input.mgf --model_path model.ckpt --output_mgf den
 - `--no_one_percent_threshold`: Do not apply 1% intensity threshold
 - `--compounded_spectra`: Enable chimeric spectrum reconstruction [default: True]
 - `--no_compounded_spectra`: Disable chimeric spectrum reconstruction
+- `--num_workers`: Number of workers for processing [default: 0]
 
-### 3. Compression/Decompression (main_cmd_line.py)
+### 3. Compression/Decompression (main.py)
 Compress or decompress MGF files using SpectroVQ.
 
 #### Compression:
 ```bash
-python main_cmd_line.py --compress --input input.mgf --output output.vqms2 --weights model.ckpt --compression_method gzip --compression_level 6 --batch_size 32 --quantizer 4
+python main.py --compress --input input.mgf --output output.vqms2 --weights model.ckpt --compression_method gzip --compression_level 6 --batch_size 32 --quantizer 4
 ```
 
 #### Decompression:
 ```bash
-python main_cmd_line.py --decompress --input input.vqms2 --output output.mgf --weights model.ckpt --compression_method gzip --compression_level 6 --batch_size 32 --quantizer 4
+python main.py --decompress --input input.vqms2 --output output.mgf --weights model.ckpt --compression_method gzip --compression_level 6 --batch_size 32 --quantizer 4
 ```
 
 **Arguments:**
@@ -123,3 +124,30 @@ The training data for `train.py` should be a `.feather` file containing the foll
 - GPU acceleration is highly recommended for training and large-scale processing
 - The model automatically detects CUDA availability
 - For training, ensure your consensus library contains proper peak annotations and metadata
+
+
+## Pythonic Interface
+
+To run the model throught python, use the following example code.
+```python
+
+from SpectrumProcessing import SpectraLoading
+import torch
+from model.getModel import getModel,ApplyWeights
+
+# Model Loading
+SpectroVQ = getModel('modelParams.yaml')
+SpectroVQ = ApplyWeights(SpectroVQ,'model.ckpt')
+SpectroVQ.eval()
+
+# Spectrum Preprocessing
+mz,it = [100.0, 200.0, 300.0, ...], [100.0, 200.0, 300.0, ...]
+BinnedSpectrum,_ = SpectraLoading.massSpectrumToVector(mz,it, bin_size = 0.1,SPECTRA_DIMENSION=13500,rawIT = False,Mode = None,mean0 = False,CenterIntegerBins=False,AlterMZ=False,GenerateMZList=False,MZDiff = False,mzRange = [150,1500])
+BinnedSpectrum = torch.sqrt(BinnedSpectrum)
+
+# Model Inference
+NumberofQuantizers = 12
+reconstructed_spectrum, codebookIndices,_,_ = SpectroVQ.encode(BinnedSpectrum,NumberofQuantizers,returnAll = True)
+```
+
+
