@@ -60,7 +60,6 @@ class SpectrumBatchDecoder():
                 temp_spectra = torch.where(temp_spectra_o < 5e-3,torch.zeros_like(temp_spectra_o),temp_spectra_o)
                 temp_spectra = torch.where(((temp_spectra > 1e-2) & (temp_spectra < 5e-1)),temp_spectra*3,temp_spectra)
                 spectrum = torch.clip(Originalspectrum*1.0 + temp_spectra*0.4,0,1)
-                torch.save(Originalspectrum,'/home/james/SpectroVQ/test.tensor')
             else:
                 spectrum = rescaleSpectra(spectrum,dim = 2)
                 spectrum = torch.square(spectrum)

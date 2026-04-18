@@ -23,7 +23,7 @@ class SpectrumTorchBatchEncoder():
     '''
     This class is responsible to directly import All Spectrum from an mgf file
     '''
-    def __init__(self, mzList, intensityList,model,compounded = False):
+    def __init__(self, mzList, intensityList,model,compounded = False, verbose = 0):
         self.model = model
         self.device = next(self.model.parameters()).device
         self.dataset = SpectrumBatch(mzList,intensityList)
@@ -32,7 +32,8 @@ class SpectrumTorchBatchEncoder():
         self.compoundedCodesIdx = []
         self.MaxValList = []
         self.mzList, self.intensityList = mzList, intensityList
-        
+        self.verbose = verbose
+
     def getReconstructIndices(self,outputOutOfRange = False,quantizer = 6,batch_size = 128, num_workers = 16):
         DataLoaderBatch = DataLoader(self.dataset,batch_size = batch_size,shuffle = False,num_workers = num_workers,drop_last = False)
         CodeList = []
@@ -67,6 +68,9 @@ class SpectrumTorchBatchEncoder():
                         missingidx = (original_mz < 150) | (original_mz >= 1500)
                         extendedmz.append(original_mz[missingidx])
                         extendedit.append(original_intensity[missingidx])
+
+                if self.verbose >= 1 and batchidx % 500 == 0:
+                    print(f'Processed batch {batchidx + 1}/{len(DataLoaderBatch)}')
             finalCode = torch.concat(CodeList,dim = 1)
             
         if (self.compounded) & (outputOutOfRange):

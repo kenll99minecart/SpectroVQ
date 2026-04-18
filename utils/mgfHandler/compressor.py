@@ -94,7 +94,7 @@ class MGFCompressor():
         self.paramList = paramList
         self.MaxValList = []
 
-    def CompressAll(self,verbose = 0,num_workers = 32,debug = False):
+    def CompressAll(self,verbose = 0,num_workers = 4,debug = False):
         """
         Compress all loaded spectra using the neural network model.
 
@@ -104,14 +104,16 @@ class MGFCompressor():
 
         Args:
             verbose (int): Verbosity level for progress reporting. Defaults to 0.
-            num_workers (int): Number of worker processes for parallel processing. Defaults to 32.
+            num_workers (int): Number of worker processes for parallel processing. Defaults to 4.
         """
         self.LoadAll(debug = debug)
         if verbose >=1:
             print(f'Loaded {len(self.mzList)} spectra from {self.mgfFilePath}')
             print(f'Starting Compression with batch size {self.batch_size} and quantizer {self.quantizer}')
-        tb = torchprocessor.SpectrumTorchBatchEncoder(self.mzList,self.intensityList,self.model,compounded = True)
+        tb = torchprocessor.SpectrumTorchBatchEncoder(self.mzList,self.intensityList,self.model,compounded = True,verbose = verbose)
         output_codes = tb.getReconstructIndices(outputOutOfRange = self.outputOutOfRange,quantizer = self.quantizer,batch_size = self.batch_size, num_workers = num_workers)
+        if verbose >=1:
+            print('Compression completed, processing results...')
         raw_codes, *extra = output_codes
         output_codes = raw_codes
         if len(extra) == 4:
@@ -132,7 +134,8 @@ class MGFCompressor():
             for k in range(self.quantizer):
                 for l in range(self.model.quantizedlen): # Number of integers in each quantizer
                     self.packer.push(output_codes[j,k,l]) # First in First out
-            
+        if verbose >=1:
+            print(f'Pushing Compounded Spectrum Codes')
         if len(self.compounded_codes_list) > 0:
             for j in range(len(self.compounded_codes_list)):
                 for k in range(self.quantizer): # Number of quantizers

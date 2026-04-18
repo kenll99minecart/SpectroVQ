@@ -29,7 +29,8 @@ class MGFDecompressor():
         """
         self.model = model
         if outputfilemgf is None:
-            self.OutputFileMGF = 'output.mgf'
+            folder_path = os.path.dirname(inputFileName)
+            self.OutputFileMGF = os.path.join(folder_path, 'output.mgf')
         else:
             self.OutputFileMGF = outputfilemgf
             assert self.OutputFileMGF.endswith('.mgf'), 'Output file must be in MGF format'
@@ -106,7 +107,7 @@ class MGFDecompressor():
             verbose (int): Verbosity level for progress reporting. Defaults to 0.
         """
         self.CodesList = []
-        df_metadata = pd.read_parquet(self.metadataFileName,engine='fastparquet').reset_index(drop = True)
+        df_metadata = pd.read_parquet(self.metadataFileName).reset_index(drop = True)
         ListOfSpectrum = []
         CompoundedSpectrumDict = OrderedDict()
         if self.stored_raw:
@@ -161,7 +162,8 @@ class MGFDecompressor():
             # Process compounded spectra in batches
             for batch_start in range(0, compounded_codes.shape[0], self.batch_size):
                 if verbose >= 1:
-                    print(f'Processing compounded denoised spectrum batch {batch_start}')
+                    if batch_start % 500 == 0:
+                        print(f'Processing compounded denoised spectrum batch {batch_start}')
                 batch_end = min(batch_start + self.batch_size, total_spectra)
                 current_batch_size = batch_end - batch_start
 
@@ -192,13 +194,13 @@ class MGFDecompressor():
                 if 'ExtendedMZ' in batched_compounded_metadata.columns:
                     batched_compounded_metadata.pop('ExtendedMZ')
                     batched_compounded_metadata.pop('ExtendedIT')
+                
 
                 # Convert compounded spectra to MGF format
                 for k in range(len(batched_compounded_max_value_list)):
-                    print(batched_compounded_metadata.iloc[k])
                     spectrum = self.formatMGFformat(output_mz[k], output_intensity[k], batched_compounded_metadata.iloc[k])
                     CompoundedSpectrumDict[str(batched_compounded_metadata.iloc[k]['OriginalIndex'])] = spectrum
-    
+                    CompoundedSpectrumDict[str(batched_compounded_metadata.iloc[k]['OriginalIndex'])]['params'].pop('OriginalIndex')
         # Process other spectrum normally
         for batch_start in range(0, total_spectra, self.batch_size):
             batch_end = min(batch_start + self.batch_size, total_spectra)
@@ -232,7 +234,8 @@ class MGFDecompressor():
             if 'ExtendedMZ' in metaDataBatch.columns:
                 metaDataBatch.pop('ExtendedMZ')
                 metaDataBatch.pop('ExtendedIT')
-            
+            metaDataBatch.pop('OriginalIndex')
+
             # Convert batch to MGF format
             for k in range(current_batch_size):
                 if verbose >= 2 and (batch_start + k) % 1000 == 0 and (batch_start + k) > 0:
@@ -254,9 +257,9 @@ class MGFDecompressor():
         if verbose >=1:
             print('Starting to write spectra to MGF file.')
             print(f"Number of spectra: {len(ListOfSpectrum)}")
-        if verbose >=2:
-            for spec in ListOfSpectrum:
-                print(spec['params']['title'])
+        # if verbose >=2:
+            # for spec in ListOfSpectrum:
+            #     print(spec['params']['title'])
         # write all spectra to MGF file
         if self.stored_raw:
             TotalListSpectrum = ListOfSpectrum + ListOfRawSpectrum
