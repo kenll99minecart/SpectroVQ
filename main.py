@@ -19,6 +19,7 @@ argparser.add_argument('--compression_level','-cL',type = str, help = 'Compressi
 argparser.add_argument('--batch_size','-b',type = int, help = 'Batch size for compression')
 argparser.add_argument('--quantizer','-q',type = int, help = 'Quantizer level for compression')
 argparser.add_argument('--stored_raw','-sR', action = 'store_true', help = 'Store raw reconstructed spectra')
+argparset.add_argument('--verbose','-v', action = 'store_true', help = 'Verbose output')
 # %%
 arguments = argparser.parse_args()
 compress = arguments.compress
@@ -26,10 +27,11 @@ decompress = arguments.decompress
 input_file_path = arguments.input
 output_file_path = arguments.output
 weights_path = arguments.weights
-compression_method = arguments.compression
+compression_method = arguments.compression_method
 compression_level = arguments.compression_level
 batch_size = arguments.batch_size
 stored_raw = arguments.stored_raw
+verbose = arguments.verbose
 
 # Double check the input
 if input_file_path is None:
@@ -71,6 +73,10 @@ elif compress:
     ,gzip_compression_level = None, zlib_compression_level = None, zstd_compression_level = level)
     else:
         raise ValueError("Compression method must be either 'gzip', 'zlib', or 'zstd'")
+    if verbose:
+        print("Compressing...")
+    verboseInt = 2 if verbose else 0
+    mgfcompressor.CompressAll(verbose=verboseInt, debug=False)
 elif decompress:
     if not input_file_path.endswith(".vqms2"):
         raise ValueError("Input file must be a .vqms2")
@@ -85,4 +91,8 @@ elif decompress:
     ,gzip_compression_level = None, zlib_compression_level = None, zstd_compression_level = level)
     else:
         raise ValueError("Compression method must be either 'gzip', 'zlib', or 'zstd'")
+    if verbose:
+        print("Decompressing...")
+    verboseInt = 2 if verbose else 0
+    mgfcompressor.DecompressAll(verbose=verboseInt, debug=False)
 # %%
