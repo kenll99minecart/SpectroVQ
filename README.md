@@ -29,6 +29,7 @@ pip install -r requirements.txt
 
 ## Usage
 
+The model weights is available at Zenodo.
 ### 1. Training (train.py)
 Train a new SpectroVQ model on consensus library data.
 
