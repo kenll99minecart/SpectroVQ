@@ -1,7 +1,7 @@
 # SpectroVQ
 SpectroVQ: Denoising and Compressing DDA mass spectrum
 
-![](https://github.com/kenll99minecart/SpectroVQ/blob/main/fig1_v2.png)
+![](https://github.com/kenll99minecart/SpectroVQ/blob/main/Figure1Final_v2.png)
 
 ## Installation
 
