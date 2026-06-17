@@ -1,9 +1,7 @@
 # SpectroVQ
-SpectroVQ is an autoencoder framework to compress and denoise DDA proteomics mass spectrum data without the need for peptide sequences.
+SpectroVQ: Denoising and Compressing DDA mass spectrum
 
-Neural Proteomics Mass Spectrum Compression
-
-![](https://github.com/kenll99minecart/SpectroVQ/blob/main/RVQ.png)
+![](https://github.com/kenll99minecart/SpectroVQ/blob/main/fig1_v2.png)
 
 ## Installation
 
