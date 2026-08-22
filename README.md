@@ -5,6 +5,12 @@ Neural Proteomics Mass Spectrum Compression
 
 ![](https://github.com/kenll99minecart/SpectroVQ/blob/main/RVQ.png)
 
+### Reconstruction with Increasing Number of Quantizers
+
+The animation below shows how the reconstructed spectrum improves as more residual quantizers are used (1 to 12). Reconstructed peaks are shown above the axis (colored), and the original spectrum is shown below (black) with b/y ion annotations.
+
+![](https://github.com/kenll99minecart/SpectroVQ/blob/main/quantizer_reconstruction_spectrum.gif)
+
 ## Installation
 
 ### Prerequisites
