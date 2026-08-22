@@ -1,9 +1,7 @@
 # SpectroVQ
-SpectroVQ is an autoencoder framework to compress and denoise DDA proteomics mass spectrum data without the need for peptide sequences.
+SpectroVQ: Denoising and Compressing DDA mass spectrum
 
-Neural Proteomics Mass Spectrum Compression
-
-![](https://github.com/kenll99minecart/SpectroVQ/blob/main/RVQ.png)
+![](https://github.com/kenll99minecart/SpectroVQ/blob/main/Figure1Final_v2.png)
 
 ### Reconstruction with Increasing Number of Quantizers
 
@@ -35,6 +33,7 @@ pip install -r requirements.txt
 
 ## Usage
 
+The model weights is available at Zenodo.
 ### 1. Training (train.py)
 Train a new SpectroVQ model on consensus library data.
 
