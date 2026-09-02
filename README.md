@@ -1,5 +1,5 @@
 # SpectroVQ
-SpectroVQ: Denoising and Compressing DDA mass spectrum
+SpectroVQ: Noise-Aware Compression of Proteomics Data via Vector-Quantized Deep Learning improves MS/MS data storage and Peptide Identification publications: TBH
 
 ![](https://github.com/kenll99minecart/SpectroVQ/blob/main/Figure1Final_v2.png)
 
@@ -154,5 +154,3 @@ BinnedSpectrum = torch.sqrt(BinnedSpectrum)
 NumberofQuantizers = 12
 reconstructed_spectrum, codebookIndices,_,_ = SpectroVQ.encode(BinnedSpectrum,NumberofQuantizers,returnAll = True)
 ```
-
-
