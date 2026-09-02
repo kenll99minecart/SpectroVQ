@@ -5,8 +5,7 @@ SpectroVQ: Noise-Aware Compression of Proteomics Data via Vector-Quantized Deep 
 
 ### Reconstruction with Increasing Number of Quantizers
 
-The animation below shows how the reconstructed spectrum improves as more residual quantizers are used (1 to 12). Reconstructed peaks are shown above the axis (colored), and the original spectrum is shown below (black) with b/y ion annotations.
-
+The animation below shows how the reconstructed spectrum improves as more residual quantizers are used (1 to 12). SpectroVQ allows variable compression rate by using different number of quantizers. Higher number of quantizers yields higher spectrum fidelity, but the storage size increase.
 ![](https://github.com/kenll99minecart/SpectroVQ/blob/main/quantizer_reconstruction_spectrum.gif)
 
 ## Installation
