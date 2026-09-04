@@ -8,6 +8,11 @@ SpectroVQ: Noise-Aware Compression of Proteomics Data via Vector-Quantized Deep 
 The animation below shows how the reconstructed spectrum improves as more residual quantizers are used (1 to 12). SpectroVQ allows variable compression rate by using different number of quantizers. Higher number of quantizers yields higher spectrum fidelity, but the storage size increase.
 ![](https://github.com/kenll99minecart/SpectroVQ/blob/main/quantizer_reconstruction_spectrum.gif)
 
+
+### Demo
+
+A demo version of SpectroVQ is available in https://huggingface.co/spaces/kenll/SpectroVQ.
+
 ## Installation
 
 ### Prerequisites
@@ -32,7 +37,8 @@ pip install -r requirements.txt
 
 ## Usage
 
-The model weights is available at Zenodo.
+Current model weights is available at Zenodo https://zenodo.org/records/20043624.
+
 ### 1. Training (train.py)
 Train a new SpectroVQ model on consensus library data.
 
