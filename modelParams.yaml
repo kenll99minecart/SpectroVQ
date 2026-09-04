@@ -1,26 +1,29 @@
+# Example Model Params Config file
+
 inputChannel: 1
-n_q: 16
+n_q: 12
 n_filters: 32
 n_residual_layers: 1
-lstm: 2
+lstm: 0
 ratios:
     - 9
     - 7
-    - 6
+    - 4
     - 2
 final_activation: Sigmoid
-residual_kernel_size: 8
+residual_kernel_size: 6
 codebook_size: 1024
 FiLMEncoder: false
 FiLMDecoder: false
 flattenQuantization: false
-quantizationdim: 512
-biLSTM: true
+quantizationdim: 256
+biLSTM: false
 causal: false
 useQINCo: false
 inputSize: 13500
-dimension: 512
+dimension: 256
 kernel_size: 8
 encoders: false
 bucketTransform: false
 applyquantizerdroput: false
+transformer: 6
