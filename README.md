@@ -9,9 +9,9 @@ The animation below shows how the reconstructed spectrum improves as more residu
 ![](https://github.com/kenll99minecart/SpectroVQ/blob/main/quantizer_reconstruction_spectrum.gif)
 
 
-### Demo
+### Huggingface Demo 🤗
 
-A demo version of SpectroVQ is available in https://huggingface.co/spaces/kenll/SpectroVQ.
+A demo version of SpectroVQ is available in  https://huggingface.co/spaces/kenll/SpectroVQ.
 
 ## Installation
 
