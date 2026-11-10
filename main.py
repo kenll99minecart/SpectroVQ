@@ -2,6 +2,7 @@
 from utils.mgfHandler.compressor import MGFCompressor
 from utils.mgfHandler.decompressor import MGFDecompressor
 from utils.model import getModel
+from utils.compile import COMPILE_MODES, compile_model
 import os
 import torch
 import argparse
@@ -19,6 +20,7 @@ argparser.add_argument('--compression_level','-cL',type = str, help = 'Compressi
 argparser.add_argument('--batch_size','-b',type = int, help = 'Batch size for compression')
 argparser.add_argument('--quantizer','-q',type = int, help = 'Quantizer level for compression')
 argparser.add_argument('--stored_raw','-sR', action = 'store_true', help = 'Store raw reconstructed spectra')
+argparser.add_argument('--compile', choices = COMPILE_MODES, default = 'none', help = 'torch.compile the encoder and decoder (CUDA only)')
 argparser.add_argument('--verbose','-v', action = 'store_true', help = 'Verbose output')
 # %%
 arguments = argparser.parse_args()
@@ -51,6 +53,7 @@ SpectraStream = getModel.ApplyWeights(SpectraStream,weights_path)
 # Move model to GPU and set to evaluation mode
 SpectraStream.to('cuda')
 SpectraStream.eval()
+compile_model(SpectraStream, arguments.compile, 'cuda')
 
 level = int(compression_level) if compression_level is not None else None
 if compress + decompress > 1:

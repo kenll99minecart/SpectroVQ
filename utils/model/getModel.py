@@ -35,7 +35,8 @@ def ApplyWeights(model,weights_file):
     weights = torch.load(weights_file, map_location = device)
     weights_dict = {}
     for k, v in weights['state_dict'].items():
-        new_k = k.replace('module.', '') if 'module' in k else k
+        new_k = k.replace('_orig_mod.', '') # from a torch.compile wrapper
+        new_k = new_k.replace('module.', '') if 'module' in new_k else new_k
         new_k = '.'.join(new_k.split('.')[1:]) if 'model' in new_k else new_k
         weights_dict[new_k] = v
 
