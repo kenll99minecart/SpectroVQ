@@ -53,6 +53,7 @@ python train.py --data_path library.feather --output_dir ./models --batch_size 3
 - `--num_workers`: Number of workers for data loading [default: 4]
 - `--learning_rate`: Learning rate for training [default: 1e-4]
 - `--max_epochs`: Maximum number of training epochs [default: 50]
+- `--compile`: `torch.compile` the encoder and decoder: `none`, `default` or `max-autotune` [default: none]. CUDA only; the quantizer stays eager and checkpoints keep the same keys. Needs your Python's development headers (`Python.h`).
 
 ### 2. Denoising (denoise.py)
 Denoise MGF spectra using a trained SpectroVQ model.
@@ -100,6 +101,7 @@ python main.py --decompress --input input.vqms2 --output output.mgf --weights mo
 - `--batch_size, -b`: Batch size for processing [optional]
 - `--quantizer, -q`: Quantizer level for compression [default: 4]
 - `--stored_raw, -sR`: Store raw reconstructed spectra [flag]
+- `--compile`: `torch.compile` the encoder and decoder: `none`, `default` or `max-autotune` [default: none]
 
 ## File Formats
 - **Input**: MGF files for denoising and compression

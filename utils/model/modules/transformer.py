@@ -3,7 +3,6 @@ import typing as tp
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # This software may be used and distributed according to the terms of the Llama 2 Community License Agreement.
 
-import math
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
@@ -100,61 +99,36 @@ def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):
     return freqs_cis
 
 
-def reshape_for_broadcast(freqs_cis: torch.Tensor, x: torch.Tensor):
-    """
-    Reshape frequency tensor for broadcasting it with another tensor.
-
-    This function reshapes the frequency tensor to have the same shape as the target tensor 'x'
-    for the purpose of broadcasting the frequency tensor during element-wise operations.
-
-    Args:
-        freqs_cis (torch.Tensor): Frequency tensor to be reshaped.
-        x (torch.Tensor): Target tensor for broadcasting compatibility.
-
-    Returns:
-        torch.Tensor: Reshaped frequency tensor.
-
-    Raises:
-        AssertionError: If the frequency tensor doesn't match the expected shape.
-        AssertionError: If the target tensor 'x' doesn't have the expected number of dimensions.
-    """
-    ndim = x.ndim
-    assert 0 <= 1 < ndim
-    assert freqs_cis.shape == (x.shape[1], x.shape[-1])
-    shape = [d if i == 1 or i == ndim - 1 else 1 for i, d in enumerate(x.shape)]
-    return freqs_cis.view(*shape)
-
-
 def apply_rotary_emb(
     xq: torch.Tensor,
     xk: torch.Tensor,
     freqs_cis: torch.Tensor,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """
-    Apply rotary embeddings to input tensors using the given frequency tensor.
+    Apply rotary embeddings to query 'xq' and key 'xk' with real arithmetic.
 
-    This function applies rotary embeddings to the given query 'xq' and key 'xk' tensors using the provided
-    frequency tensor 'freqs_cis'. The input tensors are reshaped as complex numbers, and the frequency tensor
-    is reshaped for broadcasting compatibility. The resulting tensors contain rotary embeddings and are
-    returned as real tensors.
+    Equivalent to multiplying the (even, odd) channel pairs, viewed as complex numbers, by
+    the complex frequency tensor, but without complex dtypes, which torch.compile handles poorly.
 
     Args:
-        xq (torch.Tensor): Query tensor to apply rotary embeddings.
-        xk (torch.Tensor): Key tensor to apply rotary embeddings.
-        freqs_cis (torch.Tensor): Precomputed frequency tensor for complex exponentials.
+        xq (torch.Tensor): Query tensor, (batch, seqlen, heads, head_dim).
+        xk (torch.Tensor): Key tensor, (batch, seqlen, heads, head_dim).
+        freqs_cis (torch.Tensor): Real tensor (seqlen, head_dim // 2, 2) holding cos and sin
+            (``torch.view_as_real`` of the output of ``precompute_freqs_cis``).
 
     Returns:
-        Tuple[torch.Tensor, torch.Tensor]: Tuple of modified query tensor and key tensor with rotary embeddings.
-
-        
-
+        Tuple[torch.Tensor, torch.Tensor]: Rotated query and key tensors.
     """
-    xq_ = torch.view_as_complex(xq.float().reshape(*xq.shape[:-1], -1, 2))
-    xk_ = torch.view_as_complex(xk.float().reshape(*xk.shape[:-1], -1, 2))
-    freqs_cis = reshape_for_broadcast(freqs_cis, xq_)
-    xq_out = torch.view_as_real(xq_ * freqs_cis).flatten(3)
-    xk_out = torch.view_as_real(xk_ * freqs_cis).flatten(3)
-    return xq_out.type_as(xq), xk_out.type_as(xk)
+    cos = freqs_cis[None, :, None, :, 0]  # (1, seqlen, 1, head_dim // 2)
+    sin = freqs_cis[None, :, None, :, 1]
+
+    def rotate(x: torch.Tensor) -> torch.Tensor:
+        pairs = x.float().reshape(*x.shape[:-1], -1, 2)
+        even, odd = pairs[..., 0], pairs[..., 1]
+        out = torch.stack((even * cos - odd * sin, even * sin + odd * cos), dim=-1)
+        return out.flatten(3).type_as(x)
+
+    return rotate(xq), rotate(xk)
 
 
 def repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor:
@@ -286,11 +260,9 @@ class Attention(nn.Module):
         xq = xq.transpose(1, 2)  # (bs, n_local_heads, seqlen, head_dim)
         keys = keys.transpose(1, 2) # (bs, n_local_heads, cache_len + seqlen, head_dim)
         values = values.transpose(1, 2) # (bs, n_local_heads, cache_len + seqlen, head_dim)
-        scores = torch.matmul(xq, keys.transpose(2, 3)) / math.sqrt(self.head_dim)
-        if mask is not None:
-            scores = scores + mask  # (bs, n_local_heads, seqlen, cache_len + seqlen)
-        scores = F.softmax(scores.float(), dim=-1).type_as(xq)
-        output = torch.matmul(scores, values)  # (bs, n_local_heads, seqlen, head_dim)
+        output = F.scaled_dot_product_attention(
+            xq, keys, values, attn_mask=mask
+        )  # (bs, n_local_heads, seqlen, head_dim)
         output = output.transpose(1, 2).contiguous().view(bsz, seqlen, -1)
         return self.wo(output)
 
@@ -430,10 +402,18 @@ class Transformer(nn.Module):
         #     params.dim, params.vocab_size, bias=False, init_method=lambda x: x
         # )
 
-        self.freqs_cis = precompute_freqs_cis(
-            # Note that self.params.max_seq_len is multiplied by 2 because the token limit for the Llama 2 generation of models is 4096. 
-            # Adding this multiplier instead of using 4096 directly allows for dynamism of token lengths while training or fine-tuning.
-            self.params.dim // self.params.n_heads, self.params.max_seq_len * 2
+        # A non-persistent buffer: it follows the model's device without a reassignment in
+        # forward (which torch.compile can't trace) and stays out of the state_dict.
+        self.register_buffer(
+            "freqs_cis",
+            torch.view_as_real(
+                # Note that self.params.max_seq_len is multiplied by 2 because the token limit for the Llama 2 generation of models is 4096. 
+                # Adding this multiplier instead of using 4096 directly allows for dynamism of token lengths while training or fine-tuning.
+                precompute_freqs_cis(
+                    self.params.dim // self.params.n_heads, self.params.max_seq_len * 2
+                )
+            ).contiguous(),  # real (end, dim // 2, 2): cos and sin
+            persistent=False,
         )
 
     
@@ -453,7 +433,6 @@ class Transformer(nn.Module):
         tokens = tokens.permute(0,2,1)
         _bsz,seqlen,channel = tokens.shape
         # h = self.tok_embeddings(tokens)
-        self.freqs_cis = self.freqs_cis.to(tokens.device)
         freqs_cis = self.freqs_cis[ : seqlen]
         h = tokens
         # mask = None

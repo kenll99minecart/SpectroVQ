@@ -11,7 +11,9 @@ import lightning as L
 from lightning.pytorch import seed_everything
 import numpy as np
 import argparse
+import sys
 from utils.model import modelStream
+from utils.compile import COMPILE_MODES, compile_model
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from lightning.pytorch.callbacks import ModelCheckpoint
 from torch.optim import AdamW
@@ -26,6 +28,7 @@ parser.add_argument('--num_workers', type=int, default=4,help = 'number of worke
 # Model hyperparameters
 parser.add_argument('--learning_rate', type=float, default=1e-4, help='learning rate for training')
 parser.add_argument('--max_epochs', type=int, default=50, help='maximum number of training epochs')
+parser.add_argument('--compile', choices=COMPILE_MODES, default='none', help='torch.compile the encoder and decoder (CUDA only; the quantizer stays eager)')
 
 args = parser.parse_args()
 output_dir = args.output_dir
@@ -33,9 +36,6 @@ data_path = args.data_path
 
 seed_everything(42, workers=True)
 torch.set_float32_matmul_precision("high")
-
-def find0arr(arr):
-    return len(arr['intensity'])
 
 def PreprocessData():
     print('Loading Training Data ....')
@@ -49,14 +49,14 @@ def PreprocessData():
     df_train['Peptide'] = df_train['Peptide'].str.replace(r'\[[^\]]*\]', 'X', regex=True)
     df_train['Peptide'] = df_train['Peptide'].str.replace(r'[^A-Za-z]', '', regex=True)
     
-    df_train['length'] = df_train.apply(find0arr,axis = 1)
+    df_train['length'] = df_train['intensity'].map(len)
     df_train = df_train[df_train['length'] > 10]
     df_train.drop('length',inplace = True,axis = 1)
     df_train['isHLA'] = df_train['Comment'].str.contains('_HLA_').astype(int)
     
     df_train['PeptideLen'] = df_train['Peptide'].apply(lambda x: len(x) > 10)
     from sklearn.model_selection import train_test_split
-    df_train['class'] = df_train.apply(lambda x: str(x['PeptideLen']) + str(x['Charge']), axis=1)
+    df_train['class'] = df_train['PeptideLen'].astype(str) + df_train['Charge'].astype(str)
     train_data, test_data = train_test_split(df_train, test_size=0.05, random_state=42)
 
     # Print the shapes of the training and testing sets
@@ -226,6 +226,7 @@ def peak_portion(input, target,dim = 2):
     return noiseRatio
 
 weightCS, weightSE = 1.0, 1.0
+NAN_CHECK_EVERY = 100  # training steps between NaN checks of the loss
 class LightningModelSpectraStream(L.LightningModule):
     def __init__(self, model,learning_rate,len_train_loader,len_test_loader):
         super().__init__()
@@ -234,7 +235,7 @@ class LightningModelSpectraStream(L.LightningModule):
         self.len_test_loader = len_test_loader
         self.learning_rate = learning_rate
         self.AverageTestLossList= []
-        self.AverageTrainingLoss = []
+        self._pending_train_losses = []  # detached, still on the device: no per-step sync
         self.rng = np.random.default_rng(42)
         
     def training_step(self, batch, batch_idx):
@@ -256,11 +257,20 @@ class LightningModelSpectraStream(L.LightningModule):
             print('QuantizeLoss: {}'.format(QuantizeLoss.item()))
             print('SELoss: {}'.format(SE_Loss.item()))
 
-        if torch.isnan(loss):
-            print('NAN Loss Detected at Training batch {}'.format(batch_idx))
-        else:
-            self.AverageTrainingLoss.append(loss.item())
+        # Checking for NaN every step would force a host sync; check in groups instead.
+        self._pending_train_losses.append(loss.detach())
+        if len(self._pending_train_losses) >= NAN_CHECK_EVERY:
+            self._check_train_losses(batch_idx)
         return loss
+
+    def _check_train_losses(self, batch_idx):
+        if not self._pending_train_losses:
+            return
+        losses = torch.stack(self._pending_train_losses)
+        self._pending_train_losses.clear()
+        n_nan = int(torch.isnan(losses).sum())
+        if n_nan:
+            print('NAN Loss Detected in {} training batches up to batch {}'.format(n_nan, batch_idx))
 
     def validation_step(self, batch, batch_idx):
 
@@ -287,7 +297,7 @@ class LightningModelSpectraStream(L.LightningModule):
         self.log("val_loss", loss, sync_dist=True, on_epoch=True)
 
     def on_train_epoch_end(self):
-        self.AverageTrainingLoss.clear()
+        self._check_train_losses(self.trainer.global_step)
         self.trainer.train_dataloader.dataset.set_epoch()
         self.rng = np.random.default_rng(42 + self.rng.integers(0,1000))
         return 
@@ -330,6 +340,7 @@ model_kwargs2 = {'inputChannel': 1, 'n_q':12, 'n_filters': 32,'n_residual_layers
             'encoders':False,'bucketTransform':False,'applyquantizerdroput':True,'transformer':6}
 num_epochs = 50
 SpectraStream = modelStream.SpectroVQ(**model_kwargs2)
+compile_model(SpectraStream, args.compile, device)
 # %%
 learning_rate = 1e-4
 batch_size = 32
@@ -340,9 +351,12 @@ traindata,testdata = PreprocessData()
 # %%
 print('Creating Training Data Loaders')
 spectraTrainData = SpectrumBatch(traindata)
-train_loader = DataLoader(spectraTrainData, batch_size=batch_size, shuffle=True,num_workers=28,drop_last=True,pin_memory=True, prefetch_factor = 24)
+# On Linux, fork lets the workers share the dataset instead of each unpickling a copy
+# (~20 GB, minutes per worker, every epoch). Elsewhere fork is unsafe: keep the default.
+loader_context = 'fork' if sys.platform.startswith('linux') else None
+train_loader = DataLoader(spectraTrainData, batch_size=batch_size, shuffle=True,num_workers=28,drop_last=True,pin_memory=True, prefetch_factor = 24, multiprocessing_context=loader_context)
 spectraTestData = SpectrumBatch(testdata)
-test_loader = DataLoader(spectraTestData, batch_size=batch_size, shuffle=False,num_workers=28,drop_last=True,pin_memory = True, prefetch_factor = 24)
+test_loader = DataLoader(spectraTestData, batch_size=batch_size, shuffle=False,num_workers=28,drop_last=True,pin_memory = True, prefetch_factor = 24, multiprocessing_context=loader_context)
 LightningTrainer = LightningModelSpectraStream(SpectraStream,learning_rate=learning_rate,len_train_loader = len(train_loader),len_test_loader = len(test_loader))
 checkpoint_callback = ModelCheckpoint(dirpath=output_dir,monitor = 'val_mean_loss',filename='SpectroVQ-{epoch:02d}-{val_loss:.2f}',save_top_k=3,mode='min') 
 early_stop_callback = EarlyStopping(monitor="val_mean_loss", min_delta=0.005, patience=4, verbose=True, mode="min",check_on_train_epoch_end = False)

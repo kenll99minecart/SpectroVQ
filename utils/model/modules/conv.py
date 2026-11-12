@@ -250,4 +250,9 @@ class SConvTranspose1d(nn.Module):
             padding_right = padding_total // 2
             padding_left = padding_total - padding_right
             y = unpad1d(y, (padding_left, padding_right))
+        # The trimmed output is a view that starts mid-buffer. torch.compile can pass it
+        # uncopied to a backward kernel that assumes aligned inputs and uses vector loads, which
+        # faults with "CUDA error: misaligned address". Eager runs and inference don't need this.
+        if y.requires_grad and torch.compiler.is_compiling():
+            y = y.clone()
         return y
