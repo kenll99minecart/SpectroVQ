@@ -1,5 +1,5 @@
 # SpectroVQ
-SpectroVQ: Noise-Aware Compression of Proteomics Data via Vector-Quantized Deep Learning improves MS/MS data storage and Peptide Identification ![link](https://www.biorxiv.org/content/10.64898/2026.09.05.749393v1.full)
+SpectroVQ: Noise-Aware Compression of Proteomics Data via Vector-Quantized Deep Learning improves MS/MS data storage and Peptide Identification [link](https://www.biorxiv.org/content/10.64898/2026.09.05.749393v1.full)
 
 ![](https://github.com/kenll99minecart/SpectroVQ/blob/main/Figure1Final_v2.png)
 
